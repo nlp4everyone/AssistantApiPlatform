@@ -81,9 +81,9 @@ async def create_thread(payload: CreateThreadRequest = Body(default = CreateThre
 
         # Add message if has message
         if len(output_messages) > 0:
-            await PostgresMessageStore.insert_message(pool = postgres_pool,
-                                                      data = data,
-                                                      thread_id = thread_id)
+            await PostgresMessageStore.insert_messages(pool = postgres_pool,
+                                                       data = data,
+                                                        thread_id = thread_id)
     except (asyncpg.PostgresError, socket.gaierror) as e:
         SystemLogger.error(e)
         raise PostgresConnectionException()
