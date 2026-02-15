@@ -1,5 +1,6 @@
 # FastAPI components
 from fastapi import APIRouter, Depends, Body
+from fastapi.responses import StreamingResponse
 # Schema
 from app.schemas.threads import (ThreadObject,
                                  CreateThreadRequest,
@@ -7,20 +8,28 @@ from app.schemas.threads import (ThreadObject,
 from app.schemas.messages import (MessageTextContent,
                                   ContentItem,
                                   MessageObject)
+from app.schemas.runs.requests import CreateThreadRunRequest
+from app.schemas.runs import RunObject
 # Exception
 from app.exceptions.postgres import PostgresConnectionException
 from app.exceptions import InvalidIdFormatException
 
 # Postgres Components
-from app.startup import get_postgres_pool
+from app.startup import get_postgres_pool, get_model
 from app.db.postgres import PostgresThreadStore, PostgresMessageStore
-
+from app.db.postgres import AssistantStore
 # Utils
 from app.utils.id_generation import generate_assistant_object
+from app.services.streaming import handle_streaming_response
+from app.utils.messaging import _update_assistant_response
 # Security
 from app.security.auth import verify_api_key
 # Logger
 from loggers import SystemLogger
+# TaskIQ worker
+from taskiq_worker import run_background_llm
+# Prompt
+from app.core.config.prompts import DEFAULT_ASSISTANT_PROMPT
 # Other components
 import time, asyncpg, socket
 
@@ -93,6 +102,82 @@ async def create_thread(payload: CreateThreadRequest = Body(default = CreateThre
                         created_at = created_at_seconds,
                         metadata = payload.metadata or {},
                         tool_resources = payload.tool_resources or {})
+
+@thread_router.post("/threads/runs")
+async def create_thread_and_run(request: CreateThreadRunRequest,
+                                api_key: str = Depends(verify_api_key)):
+    # Postgres Service
+    postgres_pool = get_postgres_pool()
+    llm = get_model()
+
+    # Check assistant_id
+    if not request.assistant_id.startswith("asst"):
+        raise InvalidIdFormatException(input=request.assistant_id,
+                                       params="assistant_id",
+                                       prefix="asst")
+
+    # Default value
+    run_id = generate_assistant_object(object="run")
+    step_id = generate_assistant_object(object="step")
+    message_id = generate_assistant_object(object="message")
+    thread_id = generate_assistant_object(object = "thread")
+
+    # Normally here you'd forward request to OpenAI or process internally
+    try:
+        # Create new thread
+        await PostgresThreadStore.insert_thread(pool = postgres_pool,
+                                                thread_id = thread_id)
+        # Get assistant info
+        assistant_info = await AssistantStore.get_assistant(pool = postgres_pool,
+                                                            assistant_id = request.assistant_id)
+        # Normalize ssistant info
+        assistant_objects = _update_assistant_response([assistant_info])
+        assistant_info = assistant_objects[0]
+        instructions = request.instructions if request.instructions else assistant_info.instructions or DEFAULT_ASSISTANT_PROMPT
+        # Get output params for both streaming and non-streaming modes
+        temperature = request.temperature if isinstance(request.temperature, float) else assistant_info.temperature
+        top_p = request.top_p if isinstance(request.top_p, float) else assistant_info.top_p
+        
+        if not request.stream:
+            # Run in background
+            await run_background_llm.kiq(thread_id,
+                                        run_id,
+                                        request,
+                                        request.assistant_id,
+                                        instructions,
+                                        message_id,
+                                        temperature,
+                                        top_p)
+            # Not in stream mode
+            return RunObject(id = run_id,
+                             created_at = int(time.time()),
+                             assistant_id = request.assistant_id,
+                             thread_id = thread_id,
+                             status = "queued",
+                             model = request.model,
+                             completed_at = int(time.time()),
+                             temperature = temperature,
+                             top_p = top_p,
+                             max_prompt_tokens = request.max_prompt_tokens,
+                             max_completion_tokens = request.max_completion_tokens)
+
+        # Streaming
+        return StreamingResponse(handle_streaming_response(llm = llm,
+                                                           postgres_pool=postgres_pool,
+                                                           run_id=run_id,
+                                                           thread_id=thread_id,
+                                                           message_id=message_id,
+                                                           step_id=step_id,
+                                                           assistant_id =  request.assistant_id,
+                                                           request = request.model_dump(),
+                                                           instructions = instructions,
+                                                           temperature = temperature,
+                                                           top_p = top_p),
+                                 media_type="text/event-stream")
+    except (asyncpg.PostgresError, socket.gaierror) as e:
+        # Postgres connection error
+        SystemLogger.error(e)
+        raise PostgresConnectionException()
 
 @thread_router.get("/threads/{thread_id}", response_model = ThreadObject)
 async def retrieve_thread(thread_id: str,
