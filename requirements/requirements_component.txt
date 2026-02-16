@@ -1,0 +1,2 @@
+# Token counter
+tiktoken==0.9.0
