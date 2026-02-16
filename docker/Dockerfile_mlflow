@@ -1,0 +1,12 @@
+FROM ghcr.io/mlflow/mlflow:v3.5.0
+
+# Install dependencies needed to build psycopg2
+RUN apt-get update && apt-get install -y \
+      gcc \
+      libpq-dev \
+      curl \
+      && rm -rf /var/lib/apt/lists/*
+
+# Install psycopg2-binary (or psycopg2)
+RUN pip install psycopg2-binary==2.9.11
+RUN pip install boto3==1.40.50
