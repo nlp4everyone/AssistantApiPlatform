@@ -8,16 +8,21 @@ from app.db.postgres import PostgresRunStore
 from app.db.postgres import PostgresMessageStore
 # Utils
 from app.utils.token_counter import approximate_count_tokens
+from app.utils.messaging import convert_langchain_to_chat_messages
 from app.utils.messaging import _convert_to_message_objects, _convert_to_langchain_messages
 # Common services
 from app.services.common import prepare_generation_context
-# External dependencies
-import asyncpg
 # Langchain imports
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage
 # Logger
 from loggers import SystemLogger
+# External dependencies
+import asyncpg, mlflow
+from mlflow.entities import SpanType
+
+# Enable logging
+mlflow.config.enable_async_logging()
 
 async def generate_response_from_messages(postgres_pool: asyncpg.Pool,
                                           llm: ChatOpenAI,
@@ -69,8 +74,15 @@ async def generate_response_from_messages(postgres_pool: asyncpg.Pool,
         status=RunStatus.RUNNING
     )
 
-    # Generate response using the language model
-    response = await llm.ainvoke(langchain_messages)
+    # Tracking with span
+    with mlflow.start_span(span_type=SpanType.CHAT_MODEL) as span:
+        # Set input
+        span.set_inputs(convert_langchain_to_chat_messages(langchain_messages))
+        # Generate response using the language model
+        response = await llm.ainvoke(langchain_messages)
+        # Set output
+        span.set_outputs([{"role":"assistant","content": response.content}])
+
     # Convert response to ChatMessage format
     response_message = ChatMessage(role="assistant", content=response.content).model_dump()
 
@@ -106,6 +118,8 @@ async def generate_response_from_messages(postgres_pool: asyncpg.Pool,
         run_id=run_id,
         status=RunStatus.COMPLETED
     )
+    # Update state
+    mlflow.flush_async_logging()
 
     return [response_message]
 

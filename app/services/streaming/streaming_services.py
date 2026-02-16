@@ -6,7 +6,9 @@ from app.schemas.runs.models import TokenUsage
 from app.db.postgres import PostgresRunStore, PostgresMessageStore
 # Utils
 from app.utils.events import EventManager
-from app.utils.messaging import _convert_to_message_objects, _convert_to_langchain_messages
+from app.utils.messaging import (_convert_to_message_objects,
+                                 _convert_to_langchain_messages,
+                                 convert_langchain_to_chat_messages)
 # Langchain imports
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage
@@ -19,7 +21,10 @@ from loggers import SystemLogger
 # Common
 from app.services.common import prepare_generation_context
 # Import dependencies
-import asyncpg
+import asyncpg, mlflow
+from mlflow.entities import SpanType
+# Enable logging
+mlflow.config.enable_async_logging()
 
 async def handle_streaming_response(postgres_pool: asyncpg.Pool,
                                     llm: ChatOpenAI,
@@ -141,18 +146,27 @@ async def stream_response_from_messages(postgres_pool: asyncpg.Pool,
             run_id=run_id,
             status=RunStatus.RUNNING
         )
-        
-        # Stream response using ChatOpenAI
-        response_chunks = []
-        async for chunk in llm.astream(langchain_messages):
-            if chunk.content:
-                response_chunks.append(chunk.content)
-                
-                # Emit delta event using event manager
-                yield event_manager.get_delta_event(chunk.content)
-        
-        # Combine all chunks
-        final_response = "".join(response_chunks)
+
+        # Tracking with span
+        with mlflow.start_span(span_type=SpanType.CHAT_MODEL) as span:
+            # Set input
+            span.set_inputs(convert_langchain_to_chat_messages(langchain_messages))
+
+            # Stream response using ChatOpenAI
+            response_chunks = []
+            async for chunk in llm.astream(langchain_messages):
+                if chunk.content:
+                    response_chunks.append(chunk.content)
+
+                    # Emit delta event using event manager
+                    yield event_manager.get_delta_event(chunk.content)
+
+            # Combine all chunks
+            final_response = "".join(response_chunks)
+            # Set output
+            span.set_outputs([{"role": "assistant", "content": final_response}])
+
+        # Define response
         response_message = ChatMessage(role="assistant", content=final_response).model_dump()
 
         # Store the complete response
@@ -187,6 +201,9 @@ async def stream_response_from_messages(postgres_pool: asyncpg.Pool,
             run_id=run_id,
             status=RunStatus.COMPLETED
         )
+
+        # Update state
+        mlflow.flush_async_logging()
 
         # Emit message completed event using event manager
         yield event_manager.get_message_completed_event(final_response)
