@@ -2,12 +2,12 @@ from pydantic import BaseModel, Field, constr, confloat
 from typing import Optional, Dict, List, Literal
 from .tools import Tool, ToolResource, ResponseFormat
 # Config
-from app.core.config.constants.prompts import DEFAULT_ASSISTANT_PROMPT
-from app.core.config.constants.constants import MODEL_NAME
+from app.core.config.prompts import DEFAULT_ASSISTANT_PROMPT
+from app.core.config.models import LLM_MODEL_NAME
 
 class CreateAssistantRequest(BaseModel):
     model: constr(strip_whitespace = True, min_length = 1) = Field(
-        default = MODEL_NAME,
+        default = LLM_MODEL_NAME,
         description=(
             "ID of the model to use.\n\n"
             "Example: `Qwen3-8B` or another available model ID."
