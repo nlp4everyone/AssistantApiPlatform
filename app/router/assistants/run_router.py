@@ -118,10 +118,10 @@ async def create_run(thread_id: str = Path(..., description="The ID of the threa
                                  media_type = "text/event-stream")
     except (asyncpg.PostgresError, socket.gaierror) as e:
         # Postgres connection error
-        SystemLogger.error(e)
+        SystemLogger.error(f"[RUN_ROUTER] Failed to create run for thread {thread_id}: {e}")
         raise PostgresConnectionException()
     except ThreadNotFoundException as e:
-        SystemLogger.error(e)
+        SystemLogger.error(f"[RUN_ROUTER] Thread not found for run creation: {e}")
         raise ThreadNotFoundException(thread_id = thread_id)
 
 @run_router.get("/{thread_id}/runs",
@@ -192,7 +192,7 @@ async def list_runs(thread_id :str,
 
     except (asyncpg.PostgresError, socket.gaierror) as e:
         # Postgres connection error
-        SystemLogger.error(e)
+        SystemLogger.error(f"[RUN_ROUTER] Failed to list runs for thread {thread_id}: {e}")
         raise PostgresConnectionException()
 
 @run_router.get("/{thread_id}/runs/{run_id}",
@@ -254,5 +254,5 @@ async def retrieve_run(thread_id: str,
 
     except (asyncpg.PostgresError, socket.gaierror) as e:
         # Postgres connection error
-        SystemLogger.error(e)
+        SystemLogger.error(f"[RUN_ROUTER] Failed to retrieve run {run_id} from thread {thread_id}: {e}")
         raise PostgresConnectionException()

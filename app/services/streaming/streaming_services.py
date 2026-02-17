@@ -222,7 +222,7 @@ async def stream_response_from_messages(postgres_pool: asyncpg.Pool,
         yield event_manager.get_done_event()
         
     except Exception as e:
-        SystemLogger.error(f"Streaming generation failed for run {run_id}: {e}")
+        SystemLogger.error(f"[STREAMING_SERVICE] Streaming generation failed for run {run_id}: {e}")
         await PostgresRunStore.update_run_status(
             pool=postgres_pool,
             run_id=run_id,

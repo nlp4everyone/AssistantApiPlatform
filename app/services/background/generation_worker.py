@@ -197,7 +197,7 @@ async def handle_generation_response(postgres_pool: asyncpg.Pool,
 
     except Exception as e:
         # Log the error for debugging purposes
-        SystemLogger.error(f"Generation failed for run {run_id}: {e}")
+        SystemLogger.error(f"[GENERATION_WORKER] Background generation failed for run {run_id}: {e}")
         # Update run status to failed to indicate the error
         await PostgresRunStore.update_run_status(
             pool=postgres_pool,

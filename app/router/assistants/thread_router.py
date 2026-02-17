@@ -98,10 +98,10 @@ async def create_thread(payload: CreateThreadRequest = Body(default = CreateThre
                                                        data = data,
                                                        thread_id = thread_id)
     except (asyncpg.PostgresError, socket.gaierror) as e:
-        SystemLogger.error(e)
+        SystemLogger.error(f"[THREAD_ROUTER] Failed to create thread {thread_id}: {e}")
         raise PostgresConnectionException()
     except Exception as e:
-        SystemLogger.error(e)
+        SystemLogger.error(f"[THREAD_ROUTER] Unexpected error creating thread {thread_id}: {e}")
 
     # Return
     return ThreadObject(id = thread_id,
@@ -191,7 +191,7 @@ async def create_thread_and_run(request: CreateThreadRunRequest,
                                  media_type="text/event-stream")
     except (asyncpg.PostgresError, socket.gaierror) as e:
         # Postgres connection error
-        SystemLogger.error(e)
+        SystemLogger.error(f"[THREAD_ROUTER] Failed to create thread and run: {e}")
         raise PostgresConnectionException()
 
 @thread_router.get("/threads/{thread_id}",
@@ -226,7 +226,7 @@ async def retrieve_thread(thread_id: str,
 
     except (asyncpg.PostgresError, socket.gaierror) as e:
         # Postgres connection error
-        SystemLogger.error(e)
+        SystemLogger.error(f"[THREAD_ROUTER] Failed to retrieve thread {thread_id}: {e}")
         raise PostgresConnectionException()
 
 @thread_router.delete("/threads/{thread_id}",
@@ -255,5 +255,5 @@ async def delete_thread(thread_id: str,
         return DeletedThreadResponse(id = thread_id)
     except (asyncpg.PostgresError, socket.gaierror) as e:
         # Postgres connection error
-        SystemLogger.error(e)
+        SystemLogger.error(f"[THREAD_ROUTER] Failed to delete thread {thread_id}: {e}")
         raise PostgresConnectionException()

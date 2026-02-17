@@ -45,10 +45,10 @@ async def init_model(serving_service_name :str = "vllm",
     try:
         resp = await llm.ainvoke("Hello")
         # Response
-        SystemLogger.success("Success on sending sample to vLLM")
-    except:
+        SystemLogger.warning(f"[STARTUP] {serving_service_name.capitalize()} service connection test successful")
+    except Exception as e:
         # Response
-        SystemLogger.error("Failed to get response from vLLM")
+        SystemLogger.error(f"[STARTUP] {serving_service_name.capitalize()} service connection test failed: {e}")
     return llm
 
 def init_postgres():
@@ -148,10 +148,10 @@ async def wait_for_postgres(pool,
             # Test the connection with a simple query
             async with pool.acquire() as conn:
                 await conn.execute("SELECT 1")
-            SystemLogger.info(f"✅ Postgres ready (on attempt {attempt})")
+            SystemLogger.warning(f"[STARTUP] PostgreSQL connection established (attempt {attempt}/{retries})")
             return
         except (ConnectionRefusedError, PostgresError) as e:
             last_exc = e
-            SystemLogger.error(f"Postgres not ready (attempt {attempt}/{retries}): {e!r}")
+            SystemLogger.error(f"[STARTUP] PostgreSQL connection failed (attempt {attempt}/{retries}): {e!r}")
             if attempt < retries:
                 await asyncio.sleep(delay)

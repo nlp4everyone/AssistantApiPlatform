@@ -103,7 +103,7 @@ async def create_message(thread_id: str,
         return message_object
     except (asyncpg.PostgresError, socket.gaierror) as e:
         # Postgres connection error
-        SystemLogger.error(e)
+        SystemLogger.error(f"[MESSAGE_ROUTER] Failed to create message in thread {thread_id}: {e}")
         raise PostgresConnectionException()
 
 @message_router.get("/{thread_id}/messages",
@@ -150,7 +150,7 @@ async def list_messages(thread_id :str,
 
     except (asyncpg.PostgresError, socket.gaierror) as e:
         # Postgres connection error
-        SystemLogger.error(e)
+        SystemLogger.error(f"[MESSAGE_ROUTER] Failed to list messages for thread {thread_id}: {e}")
         raise PostgresConnectionException()
 
 
@@ -185,7 +185,7 @@ async def retrieve_message(thread_id: str,
         return MessageObject(**result)
     except (asyncpg.PostgresError, socket.gaierror) as e:
         # Postgres connection error
-        SystemLogger.error(e)
+        SystemLogger.error(f"[MESSAGE_ROUTER] Failed to retrieve message {message_id} from thread {thread_id}: {e}")
         raise PostgresConnectionException()
 
 @message_router.delete("/{thread_id}/messages/{message_id}",
@@ -219,5 +219,5 @@ async def delete_message(thread_id: str,
         return DeletedMessageResponse(id = message_id)
     except (asyncpg.PostgresError, socket.gaierror) as e:
         # Postgres connection error
-        SystemLogger.error(e)
+        SystemLogger.error(f"[MESSAGE_ROUTER] Failed to delete message {message_id} from thread {thread_id}: {e}")
         raise PostgresConnectionException()

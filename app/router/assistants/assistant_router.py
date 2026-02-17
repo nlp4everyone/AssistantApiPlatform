@@ -59,7 +59,7 @@ async def create_assistant(request: CreateAssistantRequest,
                                temperature = request.temperature)
     except (asyncpg.PostgresError, socket.gaierror) as e:
         # Postgres connection error
-        SystemLogger.error(e)
+        SystemLogger.error(f"[ASSISTANT_ROUTER] Failed to create assistant: {e}")
         raise PostgresConnectionException()
 
 @assistant_router.get("/assistants",
@@ -114,7 +114,7 @@ async def list_assistants(request :PaginationQueryParams = Depends(),
                                    has_more = True if len(selected_assistant_objects) < total_number_assistant else False)
     except (asyncpg.PostgresError, socket.gaierror) as e:
         # Postgres connection error
-        SystemLogger.error(e)
+        SystemLogger.error(f"[ASSISTANT_ROUTER] Failed to list assistants: {e}")
         raise PostgresConnectionException()
 
 @assistant_router.get("/assistants/{assistant_id}",
@@ -146,7 +146,7 @@ async def retrieve_assistant(assistant_id: str,
         return assistant_objects[0]
     except (asyncpg.PostgresError, socket.gaierror) as e:
         # Postgres connection error
-        SystemLogger.error(e)
+        SystemLogger.error(f"[ASSISTANT_ROUTER] Failed to retrieve assistant {assistant_id}: {e}")
         raise PostgresConnectionException()
 
 @assistant_router.delete("/assistants/{assistant_id}",
@@ -177,5 +177,5 @@ async def delete_assistant(assistant_id: str,
         return DeletedAssistantResponse(id = assistant_id)
     except (asyncpg.PostgresError, socket.gaierror) as e:
         # Postgres connection error
-        SystemLogger.error(e)
+        SystemLogger.error(f"[ASSISTANT_ROUTER] Failed to delete assistant {assistant_id}: {e}")
         raise PostgresConnectionException()
