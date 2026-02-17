@@ -31,7 +31,8 @@ from app.core.config.prompts import DEFAULT_ASSISTANT_PROMPT
 # Router
 run_router = APIRouter()
 
-@run_router.post("/{thread_id}/runs")
+@run_router.post("/{thread_id}/runs",
+                 summary = "[Run] Create a run")
 async def create_run(thread_id: str = Path(..., description="The ID of the thread"),
                      request: CreateRunRequest = None,
                      api_key: str = Depends(verify_api_key)):
@@ -43,7 +44,6 @@ async def create_run(thread_id: str = Path(..., description="The ID of the threa
     ### Args
         - `thread_id` (str): The ID of the thread to create a run for.
         - `request` (CreateRunRequest): The run creation request containing parameters like assistant_id, model, instructions, etc.
-        - `api_key` (str): API key for authentication.
     """
     # Postgres Service
     postgres_pool = get_postgres_pool()
@@ -124,7 +124,9 @@ async def create_run(thread_id: str = Path(..., description="The ID of the threa
         SystemLogger.error(e)
         raise ThreadNotFoundException(thread_id = thread_id)
 
-@run_router.get("/{thread_id}/runs", response_model = RunListObject)
+@run_router.get("/{thread_id}/runs",
+                summary = "[Run] List thread runs",
+                response_model = RunListObject)
 async def list_runs(thread_id :str,
                     query_object :PaginationQueryParams = Depends(),
                     api_key: str = Depends(verify_api_key)):
@@ -135,11 +137,10 @@ async def list_runs(thread_id :str,
 
     ### Args
         - `thread_id` (str): The ID of the thread to list runs for.
-        - `limit` (int): Maximum number of runs to return.
-        - `after` (str): Return runs after this run ID.
-        - `before` (str): Return runs before this run ID.
-        - `order` (str): Sort order (asc or desc).
-        - `api_key` (str): API key for authentication.
+        - `limit` (int): A limit on the number of objects to be returned. Limit can range between 1 and 100, and the default is 20.
+        - `order` (str): Sort order by the `created_at` timestamp of the objects. `asc` for ascending order and `desc` for descending order.
+        - `after` (str, optional): A cursor for use in pagination. `after` is an object ID that defines your place in the list.
+        - `before` (str, optional): A cursor for use in pagination. `before` is an object ID that defines your place in the list.
     """
 
     # Postgres Service
@@ -194,7 +195,9 @@ async def list_runs(thread_id :str,
         SystemLogger.error(e)
         raise PostgresConnectionException()
 
-@run_router.get("/{thread_id}/runs/{run_id}", response_model = RunObject)
+@run_router.get("/{thread_id}/runs/{run_id}",
+                summary = "[Run] Retrieve a run",
+                response_model = RunObject)
 async def retrieve_run(thread_id: str,
                        run_id: str,
                        api_key: str = Depends(verify_api_key)):
@@ -206,7 +209,6 @@ async def retrieve_run(thread_id: str,
     ### Args
         - `thread_id` (str): The ID of the thread that the run belongs to.
         - `run_id` (str): The ID of the run to retrieve.
-        - `api_key` (str): API key for authentication.
     """
 
     # Postgres Service

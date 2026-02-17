@@ -36,7 +36,9 @@ import time, asyncpg, socket
 # Define router
 thread_router = APIRouter()
 
-@thread_router.post("/threads", response_model = ThreadObject)
+@thread_router.post("/threads",
+                    summary = "[Thread] Create a thread",
+                    response_model = ThreadObject)
 async def create_thread(payload: CreateThreadRequest = Body(default = CreateThreadRequest()),
                         api_key: str = Depends(verify_api_key)):
     """
@@ -45,7 +47,9 @@ async def create_thread(payload: CreateThreadRequest = Body(default = CreateThre
     Reference: [OpenAI Create Thread API](https://platform.openai.com/docs/api-reference/threads/createThread)
     
     ### Args
-        - `payload` (CreateThreadRequest): The thread creation request containing optional messages, metadata, and tool resources.
+        - `messages` (Optional[List[ChatMessage]]): A list of messages to start the thread with. Default: None
+        - `metadata` (Optional[Dict[str, Any]]): Set of 16 key-value pairs that can be attached to the thread. Default: {}
+        - `tool_resources` (Optional[ToolResource]): A set of resources that are made available to the assistant's tools in this thread. Default: {}
     """
     # Generate new thread
     thread_id = generate_assistant_object()
@@ -92,10 +96,12 @@ async def create_thread(payload: CreateThreadRequest = Body(default = CreateThre
         if len(output_messages) > 0:
             await PostgresMessageStore.insert_messages(pool = postgres_pool,
                                                        data = data,
-                                                        thread_id = thread_id)
+                                                       thread_id = thread_id)
     except (asyncpg.PostgresError, socket.gaierror) as e:
         SystemLogger.error(e)
         raise PostgresConnectionException()
+    except Exception as e:
+        SystemLogger.error(e)
 
     # Return
     return ThreadObject(id = thread_id,
@@ -103,9 +109,18 @@ async def create_thread(payload: CreateThreadRequest = Body(default = CreateThre
                         metadata = payload.metadata or {},
                         tool_resources = payload.tool_resources or {})
 
-@thread_router.post("/threads/runs")
+@thread_router.post("/threads/runs",
+                    summary = "[Thread] Create thread and run")
 async def create_thread_and_run(request: CreateThreadRunRequest,
                                 api_key: str = Depends(verify_api_key)):
+    """
+    ## Create a thread and run it with an assistant.
+
+    Reference: [OpenAI Create Thread and Run API](https://developers.openai.com/api/reference/resources/beta/subresources/threads/methods/create_and_run)
+
+    ### Args
+        - `request` (CreateThreadRunRequest): The thread and run creation request containing assistant ID, optional thread configuration, and run parameters.
+    """
     # Postgres Service
     postgres_pool = get_postgres_pool()
     llm = get_model()
@@ -179,7 +194,9 @@ async def create_thread_and_run(request: CreateThreadRunRequest,
         SystemLogger.error(e)
         raise PostgresConnectionException()
 
-@thread_router.get("/threads/{thread_id}", response_model = ThreadObject)
+@thread_router.get("/threads/{thread_id}",
+                   summary = "[Thread] Retrieve a thread",
+                   response_model = ThreadObject)
 async def retrieve_thread(thread_id: str,
                           api_key: str = Depends(verify_api_key)):
     """
@@ -212,7 +229,9 @@ async def retrieve_thread(thread_id: str,
         SystemLogger.error(e)
         raise PostgresConnectionException()
 
-@thread_router.delete("/threads/{thread_id}", response_model = DeletedThreadResponse)
+@thread_router.delete("/threads/{thread_id}",
+                      summary = "[Thread] Delete a thread",
+                      response_model = DeletedThreadResponse)
 async def delete_thread(thread_id: str,
                         api_key: str = Depends(verify_api_key)):
     """
@@ -228,12 +247,10 @@ async def delete_thread(thread_id: str,
 
     # Check string format of thread id
     if not thread_id.startswith("thread"):
-        raise InvalidIdFormatException(input = thread_id,
-                                       params = "thread_id")
+        raise InvalidIdFormatException(input = thread_id, params = "thread_id")
     try:
         # Try delete
-        await PostgresThreadStore.delete_thread(pool = postgres_pool,
-                                                thread_id = thread_id)
+        await PostgresThreadStore.delete_thread(pool = postgres_pool, thread_id = thread_id)
         # Return
         return DeletedThreadResponse(id = thread_id)
     except (asyncpg.PostgresError, socket.gaierror) as e:

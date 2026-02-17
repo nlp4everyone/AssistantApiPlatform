@@ -1,6 +1,6 @@
 # FastAPI components
 from fastapi import APIRouter, Depends
-# Object
+# Schema
 from app.schemas.assistants import (AssistantObject,
                                     CreateAssistantRequest,
                                     AssistantListObject,
@@ -24,7 +24,9 @@ import time, asyncpg, socket
 
 assistant_router = APIRouter()
 
-@assistant_router.post("/assistants", response_model = AssistantObject)
+@assistant_router.post("/assistants",
+                       summary = "[Assistant] Create an assistant",
+                       response_model = AssistantObject)
 async def create_assistant(request: CreateAssistantRequest,
                            api_key: str = Depends(verify_api_key)):
     """
@@ -40,8 +42,8 @@ async def create_assistant(request: CreateAssistantRequest,
     try:
         # Insert new assistant to Postgres
         await AssistantStore.create_assistant(pool = postgres_pool,
-                                                 assistant_id = assistant_id,
-                                                 request = request)
+                                              assistant_id = assistant_id,
+                                              request = request)
         # ***Check if specify vector store ids existed ( In tool resource)***
         # ***Check only use for normal case ( Not RAG) and supported type in Assistant***
 
@@ -60,7 +62,9 @@ async def create_assistant(request: CreateAssistantRequest,
         SystemLogger.error(e)
         raise PostgresConnectionException()
 
-@assistant_router.get("/assistants", response_model = AssistantListObject)
+@assistant_router.get("/assistants",
+                      summary = "[Assistant] List all assistants",
+                      response_model = AssistantListObject)
 async def list_assistants(request :PaginationQueryParams = Depends(),
                           api_key: str = Depends(verify_api_key)):
     """
@@ -79,21 +83,21 @@ async def list_assistants(request :PaginationQueryParams = Depends(),
     # Check input assistant format (Before)
     if request.before and not request.before.startswith("asst"):
         raise InvalidIdFormatException(input = request.before,
-                                   params = "before",
-                                   prefix = "asst")
+                                       params = "before",
+                                       prefix = "asst")
     # Check input assistant format (After)
     if request.after and not request.after.startswith("asst"):
         raise InvalidIdFormatException(input = request.after,
-                                   params = "after",
-                                   prefix = "asst")
+                                       params = "after",
+                                       prefix = "asst")
 
     try:
         # Make the response
         selected_assistant_objects = await AssistantStore.list_assistants(pool = postgres_pool,
-                                                                           order = request.order,
-                                                                           limit = request.limit,
-                                                                           after = request.after,
-                                                                           before = request.before)
+                                                                          order = request.order,
+                                                                          limit = request.limit,
+                                                                          after = request.after,
+                                                                          before = request.before)
         # Total assistant counts
         total_number_assistant = await AssistantStore.count_assistants(pool = postgres_pool)
 
@@ -113,7 +117,9 @@ async def list_assistants(request :PaginationQueryParams = Depends(),
         SystemLogger.error(e)
         raise PostgresConnectionException()
 
-@assistant_router.get("/assistants/{assistant_id}", response_model = AssistantObject)
+@assistant_router.get("/assistants/{assistant_id}",
+                      summary = "[Assistant] Retrieve an assistant",
+                      response_model = AssistantObject)
 async def retrieve_assistant(assistant_id: str,
                              api_key: str = Depends(verify_api_key)):
     """
@@ -129,8 +135,8 @@ async def retrieve_assistant(assistant_id: str,
     # Check assistant_id
     if not assistant_id.startswith("asst"):
         raise InvalidIdFormatException(input = assistant_id,
-                                   params = "assistant_id",
-                                   prefix = "asst")
+                                       params = "assistant_id",
+                                       prefix = "asst")
     try:
         res = await AssistantStore.get_assistant(pool = postgres_pool,
                                                  assistant_id = assistant_id)
@@ -143,7 +149,8 @@ async def retrieve_assistant(assistant_id: str,
         SystemLogger.error(e)
         raise PostgresConnectionException()
 
-@assistant_router.delete("/assistants/{assistant_id}")
+@assistant_router.delete("/assistants/{assistant_id}",
+                         summary = "[Assistant] Delete an assistant")
 async def delete_assistant(assistant_id: str,
                            api_key: str = Depends(verify_api_key)):
     """
@@ -159,8 +166,8 @@ async def delete_assistant(assistant_id: str,
     # Check assistant_id
     if not assistant_id.startswith("asst"):
         raise InvalidIdFormatException(input = assistant_id,
-                                   params = "assistant_id",
-                                   prefix = "asst")
+                                       params = "assistant_id",
+                                       prefix = "asst")
 
     try:
         # Delete assistant

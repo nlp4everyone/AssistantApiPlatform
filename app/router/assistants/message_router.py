@@ -1,6 +1,6 @@
 # FastAPI components
 from fastapi import APIRouter, Depends
-# Object Schema
+# Schema
 from app.schemas.common import (ChatMessage,
                                 PaginationQueryParams)
 from app.schemas.messages import (MessageObject,
@@ -29,7 +29,9 @@ from typing import Optional
 # Define message router
 message_router = APIRouter()
 
-@message_router.post("/{thread_id}/messages", response_model = MessageObject)
+@message_router.post("/{thread_id}/messages",
+                     summary = "[Message] Create a message",
+                     response_model = MessageObject)
 async def create_message(thread_id: str,
                          message: ChatMessage,
                          api_key: str = Depends(verify_api_key)):
@@ -40,7 +42,10 @@ async def create_message(thread_id: str,
 
     ### Args
         - `thread_id` (str): The ID of the thread to create the message in.
-        - `message` (ChatMessage): The message object containing role, content, attachments, and metadata.
+        - `role` (str): The role of the entity that is creating the message ("user", "assistant", or "system"). Default: "user"
+        - `content` (str): The message content, either as a string or list of content blocks
+        - `attachments` (List[Attachment]): A list of files attached to the message, and the tools they should be added to.
+        - `metadata` (Dict[str, str]): Set of 16 key-value pairs that can be attached to an object.
     """
     # Postgres Service
     postgres_pool = get_postgres_pool()
@@ -101,7 +106,9 @@ async def create_message(thread_id: str,
         SystemLogger.error(e)
         raise PostgresConnectionException()
 
-@message_router.get("/{thread_id}/messages", response_model = MessageListObject)
+@message_router.get("/{thread_id}/messages",
+                    summary = "[Message] List thread messages",
+                    response_model = MessageListObject)
 async def list_messages(thread_id :str,
                         run_id: Optional[str] = None,
                         query_object :PaginationQueryParams = Depends(),
@@ -114,14 +121,16 @@ async def list_messages(thread_id :str,
     ### Args
         - `thread_id` (str): The ID of the thread to list messages from.
         - `run_id` (Optional[str]): Filter messages by the run ID that generated them.
-        - `query_object` (PaginationQueryParams): Pagination parameters (limit, after, before).
+        - `limit` (int): A limit on the number of objects to be returned (max 100). Default: 20
+        - `order` (Literal["asc", "desc"]): Sort order by the created_at timestamp of the objects. asc for ascending order and desc for descending order. Default: "desc"
+        - `after` (Optional[str]): A cursor for use in pagination. `after` is an object ID that defines your place in the list. Default: None
+        - `before` (Optional[str]): A cursor for use in pagination. `before` is an object ID that defines your place in the list. Default: None
     """
     # Postgres Service
     postgres_pool = get_postgres_pool()
     # Check string format of thread id
     if not thread_id.startswith("thread"):
-        raise InvalidIdFormatException(input = thread_id,
-                                   params = "thread_id")
+        raise InvalidIdFormatException(input = thread_id, params = "thread_id")
 
     try:
         messages = await PostgresMessageStore.get_thread_messages(pool = postgres_pool,
@@ -145,7 +154,9 @@ async def list_messages(thread_id :str,
         raise PostgresConnectionException()
 
 
-@message_router.get("/{thread_id}/messages/{message_id}", response_model = MessageObject)
+@message_router.get("/{thread_id}/messages/{message_id}",
+                    summary = "[Message] Retrieve a message",
+                    response_model = MessageObject)
 async def retrieve_message(thread_id: str,
                            message_id: str,
                            api_key: str = Depends(verify_api_key)):
@@ -177,7 +188,9 @@ async def retrieve_message(thread_id: str,
         SystemLogger.error(e)
         raise PostgresConnectionException()
 
-@message_router.delete("/{thread_id}/messages/{message_id}", response_model = DeletedMessageResponse)
+@message_router.delete("/{thread_id}/messages/{message_id}",
+                       summary = "[Message] Delete a message",
+                       response_model = DeletedMessageResponse)
 async def delete_message(thread_id: str,
                          message_id: str,
                          api_key: str = Depends(verify_api_key)):
