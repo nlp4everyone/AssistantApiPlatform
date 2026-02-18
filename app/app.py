@@ -2,7 +2,10 @@ from fastapi import FastAPI
 # Define startup
 from .startup import *
 # Router
-from .router.assistants import thread_router, assistant_router, message_router, run_router
+from .router.assistants import (thread_router,
+                                assistant_router,
+                                message_router,
+                                run_router)
 # Exception
 from .exceptions import BaseException
 from .exceptions.handlers import common_exception_handler
@@ -67,6 +70,9 @@ async def startup_event():
     await wait_for_postgres(postgres_client.pool)
     # Create table if not existed
     await postgres_client._create_table()
+    # Init Minio
+    init_minio()
+    SystemLogger.info("[APP] ✅ MinIO ready")
 
     # Logging
     SystemLogger.info("[APP] ✅ Postgres ready")

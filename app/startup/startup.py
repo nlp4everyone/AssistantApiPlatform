@@ -1,14 +1,16 @@
 # Langchain component
 from langchain_openai import ChatOpenAI
 from app.db.postgres import PostgresClient
+from app.db.minio import MinioService
 # Postgres
 from asyncpg import PostgresError
 # Config
 from app.core.config import *
 # Other component
-import os, requests, time, asyncio, mlflow
+import os, requests, time, asyncio, mlflow, re
 # Logger
 from loggers import SystemLogger
+
 # Set MLflow params
 mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
 mlflow.set_experiment(MLFLOW_EXPERIMENT_NAME)
@@ -69,6 +71,46 @@ def init_postgres():
                                        host = POSTGRES_HOST,
                                        port = 5432)
     return postgres_client
+
+def init_minio():
+    """
+    Initialize MinIO object storage service connection and create MLflow bucket.
+    
+    This function sets up the MinIO service connection using environment configuration
+    and ensures the required MLflow bucket exists. If the bucket doesn't exist,
+    it creates one automatically.
+    
+    Global Variables:
+        minio_service: Global MinioService instance for object storage operations
+        
+    Raises:
+        ValueError: If MLFLOW_DEFAULT_ARTIFACT_ROOT has incorrect format
+        
+    Note:
+        - Extracts MinIO endpoint from MLFLOW_S3_ENDPOINT_URL
+        - Parses bucket name from MLFLOW_DEFAULT_ARTIFACT_ROOT (s3://bucket-name/...)
+        - Creates bucket if it doesn't exist for MLflow artifact storage
+    """
+    global minio_service
+    # Define url
+    minio_endpoint_url = MLFLOW_S3_ENDPOINT_URL.replace("http://","")
+    # Get bucket name
+    match = re.search(r'^s3://([^/]+)/', MLFLOW_DEFAULT_ARTIFACT_ROOT)
+
+    # Raise exception when not found
+    if not match:
+        raise ValueError(f"MLFLOW_DEFAULT_ARTIFACT_ROOT with incorrect format: {MLFLOW_DEFAULT_ARTIFACT_ROOT}")
+    bucket_name = match.group(1)
+
+    # Init connection
+    minio_service = MinioService(endpoint_url = minio_endpoint_url,
+                                 access_key = MINIO_ROOT_USER,
+                                 secret_key = MINIO_ROOT_PASSWORD)
+
+    # Create bucket for mlflow
+    if not minio_service.client.bucket_exists(bucket_name):
+        minio_service.client.make_bucket(bucket_name)
+        SystemLogger.success(f"Create Minio bucker for MLflow ({bucket_name}) done!")
 
 def get_model():
     """

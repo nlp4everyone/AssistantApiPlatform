@@ -1,0 +1,42 @@
+from minio import Minio
+from loggers import SystemLogger
+
+class MinioService:
+    """
+    A service class for managing MinIO object storage connections and operations.
+    
+    This class provides a wrapper around the MinIO client, handling connection
+    initialization and configuration. It establishes a connection to the MinIO
+    server and provides access to the underlying client for bucket and object operations.
+    
+    Attributes:
+        _client (Minio): The underlying MinIO client instance
+    """
+    
+    def __init__(self,
+                 endpoint_url :str,
+                 access_key :str,
+                 secret_key :str,
+                 secure :bool = False,
+                 **kwargs):
+        # Config
+        self.__endpoint_url = endpoint_url
+        self.__access_key = access_key
+        self.__secret_key = secret_key
+        self.__secure = secure
+
+        # Create client
+        self._client = Minio(endpoint = self.__endpoint_url,
+                             access_key = self.__access_key,
+                             secret_key = self.__secret_key,
+                             secure = self.__secure)
+        # Try connect
+        try:
+            # Check list buckets
+            self._client.list_buckets()
+        except:
+            SystemLogger.error(f"Failed to connect to Minio")
+
+    @property
+    def client(self) -> Minio:
+        return self._client

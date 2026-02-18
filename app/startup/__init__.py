@@ -3,4 +3,5 @@ from .startup import (init_model,
                       wait_for_serving,
                       wait_for_postgres,
                       init_postgres,
-                      get_postgres_pool)
+                      get_postgres_pool,
+                      init_minio)
