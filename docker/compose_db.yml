@@ -12,7 +12,14 @@ services:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./initdb:/docker-entrypoint-initdb.d
+    command: 
+      - bash
+      - -c
+      - |
+        docker-entrypoint.sh postgres &
+        sleep 5
+        psql -U $POSTGRES_USER -d postgres -c 'CREATE DATABASE mlflow;' || true
+        wait
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U $POSTGRES_USER" ]
       interval: 5s
