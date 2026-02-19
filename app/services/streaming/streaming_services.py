@@ -21,7 +21,7 @@ from loggers import SystemLogger
 # Common
 from app.services.common import prepare_generation_context
 # Import dependencies
-import asyncpg, mlflow
+import asyncpg, mlflow, time
 from mlflow.entities import SpanType
 # Enable logging
 mlflow.config.enable_async_logging()
@@ -36,7 +36,8 @@ async def handle_streaming_response(postgres_pool: asyncpg.Pool,
                                     assistant_id: str,
                                     instructions: str,
                                     temperature: float = None,
-                                    top_p: float = None) -> AsyncIterable:
+                                    top_p: float = None,
+                                    endpoint_path :str = None) -> AsyncIterable:
     """
     Handle streaming response using ChatOpenAI directly instead of LangGraph.
     
@@ -52,7 +53,7 @@ async def handle_streaming_response(postgres_pool: asyncpg.Pool,
         instructions: System instructions
         temperature: Optional temperature for generation randomness
         top_p: Optional top_p for nucleus sampling
-        
+        endpoint_path: Optional endpoint path for span naming
     Yields:
         Server-sent events for streaming response
     """
@@ -77,7 +78,8 @@ async def handle_streaming_response(postgres_pool: asyncpg.Pool,
         message_id=message_id,
         assistant_id=assistant_id,
         temperature=temperature,
-        top_p=top_p):
+        top_p=top_p,
+        endpoint_path = endpoint_path):
         yield event
 
 
@@ -90,7 +92,8 @@ async def stream_response_from_messages(postgres_pool: asyncpg.Pool,
                                         message_id: str,
                                         assistant_id: str,
                                         temperature: float = None,
-                                        top_p: float = None) -> AsyncIterable:
+                                        top_p: float = None,
+                                        endpoint_path :str = None) -> AsyncIterable:
     """
     Stream response from prepared messages using ChatOpenAI.
     
@@ -105,7 +108,7 @@ async def stream_response_from_messages(postgres_pool: asyncpg.Pool,
         assistant_id: Assistant identifier
         temperature: Optional temperature for generation randomness
         top_p: Optional top_p for nucleus sampling
-        
+        endpoint_path: Optional endpoint path for span naming
     Yields:
         Server-sent events for streaming response
     """
@@ -148,26 +151,51 @@ async def stream_response_from_messages(postgres_pool: asyncpg.Pool,
         )
 
         # Tracking with span
-        with mlflow.start_span(span_type=SpanType.CHAT_MODEL) as span:
+        with mlflow.start_span(name = endpoint_path, span_type=SpanType.CHAT_MODEL) as span:
             # Set input
             span.set_inputs(convert_langchain_to_chat_messages(langchain_messages))
 
+            # Set tags on span
+            mlflow.update_current_trace(tags = {"thread_id": thread_id,
+                                                "run_id": run_id,
+                                                "message_id": message_id,
+                                                "assistant_id": assistant_id})
+
             # Stream response using ChatOpenAI
             response_chunks = []
+            generation_start_time = time.perf_counter()
             async for chunk in llm.astream(langchain_messages):
                 if chunk.content:
                     response_chunks.append(chunk.content)
 
                     # Emit delta event using event manager
                     yield event_manager.get_delta_event(chunk.content)
-
+            generation_time = time.perf_counter() - generation_start_time
             # Combine all chunks
             final_response = "".join(response_chunks)
+
+            # Define response
+            response_message = ChatMessage(role="assistant", content=final_response).model_dump()
+            # Count tokens
+            prompt_tokens = approximate_count_tokens(messages)
+            completion_tokens = approximate_count_tokens(response_message)
+
+            # Add attribute ( Config, Usage, Performance)
+            throughput = completion_tokens / generation_time if generation_time > 0 else 0
+            span.set_attributes({"model_config": {"model_name": llm.model_name,
+                                                  "temperature": llm.temperature,
+                                                  "top_p": llm.top_p,
+                                                  "max_tokens": llm.max_tokens,
+                                                  "stream": True},
+                                 "model_usage": {"prompt_tokens": prompt_tokens,
+                                                 "completion_tokens": completion_tokens,
+                                                 "total_tokens": prompt_tokens + completion_tokens},
+                                 "model_performance": {"latency": round(generation_time,2),
+                                                       "throughput_tokens_per_second": round(throughput,1)}})
+
+
             # Set output
             span.set_outputs([{"role": "assistant", "content": final_response}])
-
-        # Define response
-        response_message = ChatMessage(role="assistant", content=final_response).model_dump()
 
         # Store the complete response
         await PostgresMessageStore.insert_messages(
@@ -179,10 +207,7 @@ async def stream_response_from_messages(postgres_pool: asyncpg.Pool,
                 "run_id": run_id
             }
         )
-        
-        # Count tokens
-        prompt_tokens = approximate_count_tokens(messages)
-        completion_tokens = approximate_count_tokens(response_message)
+
 
         # Update run usage
         await PostgresRunStore.update_run_usage(

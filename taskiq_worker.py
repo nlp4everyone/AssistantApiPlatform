@@ -15,7 +15,8 @@ async def run_background_llm(thread_id: str,
                              instructions: str,
                              message_id: str = None,
                              temperature: float = None,
-                             top_p: float = None):
+                             top_p: float = None,
+                             endpoint_path: str = None):
     """
     Background task to run LLM generation and store results.
     
@@ -31,6 +32,7 @@ async def run_background_llm(thread_id: str,
         message_id: Optional ID of the message being processed
         temperature: Optional sampling temperature for generation
         top_p: Optional top-p sampling parameter
+        endpoint_path: Optional endpoint path for span naming
         
     Returns:
         None
@@ -53,5 +55,6 @@ async def run_background_llm(thread_id: str,
                                      instructions=instructions,
                                      message_id=message_id,
                                      temperature=temperature,
-                                     top_p=top_p)
+                                     top_p=top_p,
+                                     endpoint_path=endpoint_path)
     return None

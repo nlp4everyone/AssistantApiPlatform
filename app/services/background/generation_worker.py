@@ -18,7 +18,7 @@ from langchain_core.messages import SystemMessage
 # Logger
 from loggers import SystemLogger
 # External dependencies
-import asyncpg, mlflow
+import asyncpg, mlflow, time
 from mlflow.entities import SpanType
 
 # Enable logging
@@ -34,7 +34,8 @@ async def generate_response_from_messages(postgres_pool: asyncpg.Pool,
                                           assistant_id: str,
                                           message_id: str = None,
                                           temperature: float = None,
-                                          top_p: float = None) -> List[Dict[str,str]]:
+                                          top_p: float = None,
+                                          endpoint_path: str = None) -> List[Dict[str,str]]:
     """
     Generate AI response from prepared messages using the specified LLM.
     
@@ -50,6 +51,7 @@ async def generate_response_from_messages(postgres_pool: asyncpg.Pool,
         message_id: Optional message identifier for response
         temperature: Optional temperature for generation randomness
         top_p: Optional top_p for nucleus sampling
+        endpoint_path: Optional endpoint path for span naming
     
     Returns:
         list: Response messages
@@ -75,16 +77,43 @@ async def generate_response_from_messages(postgres_pool: asyncpg.Pool,
     )
 
     # Tracking with span
-    with mlflow.start_span(span_type=SpanType.CHAT_MODEL) as span:
+    with mlflow.start_span(name = endpoint_path, span_type = SpanType.CHAT_MODEL) as span:
         # Set input
         span.set_inputs(convert_langchain_to_chat_messages(langchain_messages))
+        
+        # Set tags on span
+        mlflow.update_current_trace(tags = {"thread_id": thread_id,
+                                            "run_id": run_id,
+                                            "message_id": message_id,
+                                            "assistant_id": assistant_id})
+        
         # Generate response using the language model
+        generation_start_time = time.perf_counter()
         response = await llm.ainvoke(langchain_messages)
+        generation_time = time.perf_counter() - generation_start_time
+        
+        # Convert response to ChatMessage format
+        response_message = ChatMessage(role="assistant", content=response.content).model_dump()
+        
+        # Count tokens
+        prompt_tokens = approximate_count_tokens(messages)
+        completion_tokens = approximate_count_tokens(response_message)
+        
+        # Add attribute ( Config, Usage, Performance)
+        throughput = completion_tokens / generation_time if generation_time > 0 else 0
+        span.set_attributes({"model_config": {"model_name": llm.model_name,
+                                              "temperature": llm.temperature,
+                                              "top_p": llm.top_p,
+                                              "max_tokens": llm.max_tokens,
+                                              "stream": False},
+                             "model_usage": {"prompt_tokens": prompt_tokens,
+                                             "completion_tokens": completion_tokens,
+                                             "total_tokens": prompt_tokens + completion_tokens},
+                             "model_performance": {"latency": round(generation_time,2),
+                                                   "throughput_tokens_per_second": round(throughput,1)}})
+        
         # Set output
         span.set_outputs([{"role":"assistant","content": response.content}])
-
-    # Convert response to ChatMessage format
-    response_message = ChatMessage(role="assistant", content=response.content).model_dump()
 
     # Store the generated response in the database
     await PostgresMessageStore.insert_messages(
@@ -96,10 +125,6 @@ async def generate_response_from_messages(postgres_pool: asyncpg.Pool,
             "run_id": run_id
         }
     )
-
-    # Calculate token usage for both prompt and completion
-    prompt_tokens = approximate_count_tokens(messages)
-    completion_tokens = approximate_count_tokens(response_message)
 
     # Update run with token usage statistics
     await PostgresRunStore.update_run_usage(
@@ -132,7 +157,8 @@ async def handle_generation_response(postgres_pool: asyncpg.Pool,
                                      instructions: str,
                                      message_id: str = None,
                                      temperature: float = None,
-                                     top_p: float = None):
+                                     top_p: float = None,
+                                     endpoint_path: str = None):
     """
     Main orchestrator for the AI response generation process.
     
@@ -152,6 +178,7 @@ async def handle_generation_response(postgres_pool: asyncpg.Pool,
         message_id: Optional message identifier for response
         temperature: Optional temperature for generation randomness
         top_p: Optional top_p for nucleus sampling
+        endpoint_path: Optional endpoint path for span naming
     
     Returns:
         list: Generated response messages
@@ -192,7 +219,8 @@ async def handle_generation_response(postgres_pool: asyncpg.Pool,
             assistant_id=assistant_id,
             message_id=message_id,
             temperature=final_temperature,
-            top_p=final_top_p
+            top_p=final_top_p,
+            endpoint_path=endpoint_path
         )
 
     except Exception as e:

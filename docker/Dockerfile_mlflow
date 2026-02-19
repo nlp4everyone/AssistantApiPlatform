@@ -5,6 +5,7 @@ RUN apt-get update && apt-get install -y \
       gcc \
       libpq-dev \
       curl \
+      git \
       && rm -rf /var/lib/apt/lists/*
 
 # Install psycopg2-binary (or psycopg2)

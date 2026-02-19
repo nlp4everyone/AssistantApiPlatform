@@ -3,6 +3,11 @@ FROM python:3.9-slim
 # Set workdir
 WORKDIR /workspace
 
+RUN apt-get update && apt-get install -y \
+      gcc \
+      libpq-dev \
+      curl \
+      git
 # Copy requirements core files and install
 COPY requirements/requirements_core.txt .
 # Install

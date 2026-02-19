@@ -89,7 +89,8 @@ async def create_run(thread_id: str = Path(..., description="The ID of the threa
                                          instructions,
                                          message_id,
                                          temperature,
-                                         top_p)
+                                         top_p,
+                                         "/v1/threads/{thread_id}/runs")
             # Not in stream mode
             return RunObject(id = run_id,
                              created_at = int(time.time()),
@@ -114,7 +115,8 @@ async def create_run(thread_id: str = Path(..., description="The ID of the threa
                                                            assistant_id = request.assistant_id,
                                                            instructions = instructions,
                                                            temperature = temperature,
-                                                           top_p = top_p),
+                                                           top_p = top_p,
+                                                           endpoint_path = "/v1/threads/{thread_id}/runs"),
                                  media_type = "text/event-stream")
     except (asyncpg.PostgresError, socket.gaierror) as e:
         # Postgres connection error
