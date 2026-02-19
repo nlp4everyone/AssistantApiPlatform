@@ -79,6 +79,33 @@ bash view_log.sh
 ```
 http://localhost:5000/
 ```
+
+# 📚 Examples:
+The `examples/` directory contains code samples for interacting with the ChatEngine API using the OpenAI Python client.
+
+## Quick Start:
+```bash
+# Run services first
+bash run_service.sh
+
+# Install OpenAI client
+pip install openai
+
+# Run examples (choose one)
+python examples/assistant_example.py
+python examples/thread_example.py
+python examples/message_example.py
+python examples/streaming_run_example.py
+```
+
+## Available Examples:
+- **`assistant_example.py`** - Create/manage AI assistants
+- **`thread_example.py`** - Handle conversation threads  
+- **`message_example.py`** - Manage thread messages
+- **`streaming_run_example.py`** - Real-time streaming responses
+
+All examples connect to `http://localhost:8005/v1` by default. Customize `base_url` and `api_key` as needed.
+
 <br />
 
 # 💴 Intergrations:
