@@ -1,0 +1,46 @@
+[project]
+name = "chatengine"
+version = "0.1.0"
+description = "Chat Engine with AI capabilities"
+requires-python = ">=3.9"
+dependencies = [
+    # Core
+    "fastapi==0.100.0",
+    "python-multipart==0.0.20",
+    "uvicorn==0.34.2",
+    "python-dotenv==1.0.0",
+    "loguru==0.7.3",
+    "StrEnum==0.4.15",
+    
+    # Langchain
+    "langchain==0.3.27",
+    "langchain-openai==0.3.27",
+    
+    # Background task
+    "taskiq==0.11.18",
+    "taskiq-redis==1.1.0",
+    
+    # Config
+    "toml==0.10.2",
+    
+    # Postgres
+    "asyncpg==0.29.0",
+    "psycopg[binary,async]>=3.2",
+    
+    # Tracker
+    "mlflow==3.1.4",
+    
+    # S3
+    "boto3==1.40.50",
+    "minio==7.2.17",
+    
+    # Token counter
+    "tiktoken==0.9.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = []
