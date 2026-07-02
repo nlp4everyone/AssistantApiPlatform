@@ -1,16 +1,10 @@
 from typing import Optional, Any, Dict, List, Literal
 from pydantic import BaseModel
 from app.schemas.common import BaseListObject
-from app.schemas.common.message import ChatMessage
 from .models import TokenUsage
 from .steps import StepDetails
 from .tools import ToolSchema
 from .models import TruncationStrategy
-
-class ThreadObject(BaseModel):
-    messages: Optional[List[ChatMessage]] = None
-    metadata: Optional[Dict[str, str]] = None
-    tool_resources: Optional[Dict[str, Any]] = None
 
 class RunStepObject(BaseModel):
     id: str

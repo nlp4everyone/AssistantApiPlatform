@@ -10,7 +10,7 @@ from app.schemas.common import PaginationQueryParams
 from app.exceptions import InvalidIdFormatException
 from app.exceptions.postgres import PostgresConnectionException
 # Postgres
-from app.db.postgres import AssistantStore
+from app.db.postgres import PostgresAssistantStore
 from app.startup import get_postgres_pool
 # Utils
 from app.utils.id_generation import generate_assistant_object
@@ -41,7 +41,7 @@ async def create_assistant(request: CreateAssistantRequest,
 
     try:
         # Insert new assistant to Postgres
-        await AssistantStore.create_assistant(pool = postgres_pool,
+        await PostgresAssistantStore.create_assistant(pool = postgres_pool,
                                               assistant_id = assistant_id,
                                               request = request)
         # ***Check if specify vector store ids existed ( In tool resource)***
@@ -93,13 +93,13 @@ async def list_assistants(request :PaginationQueryParams = Depends(),
 
     try:
         # Make the response
-        selected_assistant_objects = await AssistantStore.list_assistants(pool = postgres_pool,
+        selected_assistant_objects = await PostgresAssistantStore.list_assistants(pool = postgres_pool,
                                                                           order = request.order,
                                                                           limit = request.limit,
                                                                           after = request.after,
                                                                           before = request.before)
         # Total assistant counts
-        total_number_assistant = await AssistantStore.count_assistants(pool = postgres_pool)
+        total_number_assistant = await PostgresAssistantStore.count_assistants(pool = postgres_pool)
 
         # Empty object
         assistant_objects = []
@@ -138,7 +138,7 @@ async def retrieve_assistant(assistant_id: str,
                                        params = "assistant_id",
                                        prefix = "asst")
     try:
-        res = await AssistantStore.get_assistant(pool = postgres_pool,
+        res = await PostgresAssistantStore.get_assistant(pool = postgres_pool,
                                                  assistant_id = assistant_id)
         # *** Need to add try/catch***
         assistant_objects = _update_assistant_response([res])
@@ -171,7 +171,7 @@ async def delete_assistant(assistant_id: str,
 
     try:
         # Delete assistant
-        await AssistantStore.delete_assistant(pool = postgres_pool,
+        await PostgresAssistantStore.delete_assistant(pool = postgres_pool,
                                               assistant_id = assistant_id)
         # Return
         return DeletedAssistantResponse(id = assistant_id)

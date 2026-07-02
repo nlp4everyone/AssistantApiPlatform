@@ -1,7 +1,7 @@
 # Typing
 from typing import Dict, Any, Optional
 # Exception
-from app.exceptions.thread import ThreadNotFoundException
+from app.exceptions.threads import ThreadNotFoundException
 # Other components
 import asyncpg, json
 

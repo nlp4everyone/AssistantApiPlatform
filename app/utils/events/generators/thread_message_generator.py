@@ -5,7 +5,6 @@ from .base_generator import BaseEventGenerator
 # Event
 from ..sse_formatter import sse_event
 # Schemas
-from app.schemas.runs.thread_message.messages import ThreadMessage
 from app.schemas.runs import MessageDeltaEvent, MessageDelta, TextDeltaBlock, TextDelta
 from app.schemas.messages.base import MessageObject
 from app.schemas.messages.models import ContentItem, MessageTextContent
@@ -13,7 +12,7 @@ from app.schemas.messages.models import ContentItem, MessageTextContent
 import time
 
 class ThreadMessageEventGenerator(BaseEventGenerator):
-    """Generator for ThreadMessage lifecycle events."""
+    """Generator for message lifecycle events."""
     
     def __init__(self, thread_id: str, run_id: str, assistant_id: str, message_id: str):
         super().__init__(thread_id, run_id, assistant_id)
@@ -27,24 +26,30 @@ class ThreadMessageEventGenerator(BaseEventGenerator):
     def _created_event(self) -> str:
         return sse_event(
             event="thread.message.created",
-            data=ThreadMessage(
+            data=MessageObject(
                 id=self.message_id,
                 created_at=self.created_at,
                 assistant_id=self.assistant_id,
                 thread_id=self.thread_id,
-                run_id=self.run_id
+                run_id=self.run_id,
+                role="assistant",
+                content=[],
+                status="in_progress"
             ).model_dump()
         )
-    
+
     def _in_progress_event(self) -> str:
         return sse_event(
             event="thread.message.in_progress",
-            data=ThreadMessage(
+            data=MessageObject(
                 id=self.message_id,
                 created_at=self.created_at,
                 assistant_id=self.assistant_id,
                 thread_id=self.thread_id,
-                run_id=self.run_id
+                run_id=self.run_id,
+                role="assistant",
+                content=[],
+                status="in_progress"
             ).model_dump()
         )
     

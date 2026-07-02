@@ -1,3 +1,4 @@
+
 from app.schemas.common import BaseDeletedResponse
 
 class DeletedMessageResponse(BaseDeletedResponse):

@@ -4,7 +4,7 @@ from app.schemas.common.message import ChatMessage
 from app.schemas.runs.tools import ToolChoice
 from app.schemas.runs.models import TruncationStrategy
 from app.schemas.runs.models import ResponseFormat, JsonObjectResponseFormat
-from app.schemas.runs.base import ThreadObject
+from app.schemas.threads.requests import CreateThreadRequest
 
 class CreateRunRequest(BaseModel):
     assistant_id: str = Field(..., description="The ID of the assistant to use for this run.")
@@ -58,7 +58,7 @@ class CreateThreadRunRequest(BaseModel):
     response_format: Optional[Union[str, ResponseFormat]] = None
     stream: Optional[bool] = None
     temperature: Optional[float] = None
-    thread: Optional[ThreadObject] = None
+    thread: Optional[CreateThreadRequest] = None
     tool_choice: Optional[Union[str, ToolChoice]] = None
     tool_resources: Optional[Dict[str, Any]] = None
     tools: Optional[List[Dict[str, Any]]] = None

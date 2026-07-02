@@ -1,8 +1,8 @@
-from ..base_exception import BaseException, BaseResponse
+from ..base_exception import AppException, BaseResponse
 from typing import Any
 from fastapi import status
 
-class MessageNotFoundException(BaseException):
+class MessageNotFoundException(AppException):
     def __init__(self,
                  message_id: str,
                  type: str = "invalid_request_error",

@@ -1,8 +1,8 @@
-from ..base_exception import BaseException, BaseResponse
+from ..base_exception import AppException, BaseResponse
 from typing import Any
 from fastapi import status
 
-class PostgresConnectionException(BaseException):
+class PostgresConnectionException(AppException):
     def __init__(self,
                  type: str = "connection_error",
                  params: Any = None,

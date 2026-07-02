@@ -2,12 +2,12 @@ from fastapi import FastAPI
 # Define startup
 from .startup import *
 # Router
-from .router.assistants import (thread_router,
-                                assistant_router,
-                                message_router,
-                                run_router)
+from .router import (thread_router,
+                     assistant_router,
+                     message_router,
+                     run_router)
 # Exception
-from .exceptions import BaseException
+from .exceptions import AppException
 from .exceptions.handlers import common_exception_handler
 # Config
 from .core.config import *
@@ -49,7 +49,7 @@ app.include_router(run_router,
                    prefix = "/v1/threads",
                    tags = [tags_metadata[1].get("name")])
 # Add exception
-app.add_exception_handler(BaseException, common_exception_handler)
+app.add_exception_handler(AppException, common_exception_handler)
 
 @app.on_event("startup")
 async def startup_event():

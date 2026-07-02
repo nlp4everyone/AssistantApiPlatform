@@ -3,14 +3,14 @@ from typing import Dict, Any, Optional, Tuple, List, Set
 # Schema
 from app.schemas.assistants import CreateAssistantRequest
 # Exception
-from app.exceptions.assistant import AssistantNotFoundException
+from app.exceptions.assistants import AssistantNotFoundException
 # Other components
 import asyncpg, json
 
 # Allowed table names to prevent SQL injection
 ALLOWED_TABLES: Set[str] = {"assistants"}
 
-class AssistantStore:
+class PostgresAssistantStore:
     @staticmethod
     def _validate_table_name(table_name: str) -> str:
         """Validate table name to prevent SQL injection."""
@@ -21,7 +21,7 @@ class AssistantStore:
     @staticmethod
     async def _check_assistant_exists(pool: asyncpg.Pool, assistant_id: str, table_name: str) -> bool:
         """Check if assistant exists in the specified table."""
-        validated_table = AssistantStore._validate_table_name(table_name)
+        validated_table = PostgresAssistantStore._validate_table_name(table_name)
         async with pool.acquire() as conn:
             return await conn.fetchval(f"SELECT 1 FROM {validated_table} WHERE assistant_id = $1", assistant_id) is not None
     
@@ -56,7 +56,7 @@ class AssistantStore:
             ValueError: If assistant with ID already exists
             RuntimeError: If database insertion fails
         """
-        validated_table = AssistantStore._validate_table_name(table_name)
+        validated_table = PostgresAssistantStore._validate_table_name(table_name)
         query = f"""
             INSERT INTO {validated_table} (
                 assistant_id, model, description, instructions, metadata, name,
@@ -109,10 +109,10 @@ class AssistantStore:
         Raises:
             AssistantNotFoundException: If assistant doesn't exist
         """
-        if not await AssistantStore._check_assistant_exists(pool, assistant_id, table_name):
+        if not await PostgresAssistantStore._check_assistant_exists(pool, assistant_id, table_name):
             raise AssistantNotFoundException(assistant_id = assistant_id)
         
-        validated_table = AssistantStore._validate_table_name(table_name)
+        validated_table = PostgresAssistantStore._validate_table_name(table_name)
         async with pool.acquire() as conn:
             row = await conn.fetchrow(f"SELECT * FROM {validated_table} WHERE assistant_id = $1", assistant_id)
             return dict(row)
@@ -130,7 +130,7 @@ class AssistantStore:
         Returns:
             int: Total count of assistants
         """
-        validated_table = AssistantStore._validate_table_name(table_name)
+        validated_table = PostgresAssistantStore._validate_table_name(table_name)
         async with pool.acquire() as conn:
             return await conn.fetchval(f'SELECT COUNT(*) FROM {validated_table};')
 
@@ -159,8 +159,8 @@ class AssistantStore:
             ValueError: If pagination parameters are invalid
         """
         # Validate parameters
-        validated_order, validated_limit = AssistantStore._validate_pagination_params(order, limit)
-        validated_table = AssistantStore._validate_table_name(table_name)
+        validated_order, validated_limit = PostgresAssistantStore._validate_pagination_params(order, limit)
+        validated_table = PostgresAssistantStore._validate_table_name(table_name)
         
         # Build the query
         query, params = _build_list_assistants_query(order = validated_order,
@@ -192,10 +192,10 @@ class AssistantStore:
         Raises:
             AssistantNotFoundException: If assistant doesn't exist
         """
-        if not await AssistantStore._check_assistant_exists(pool, assistant_id, table_name):
+        if not await PostgresAssistantStore._check_assistant_exists(pool, assistant_id, table_name):
             raise AssistantNotFoundException(assistant_id = assistant_id)
         
-        validated_table = AssistantStore._validate_table_name(table_name)
+        validated_table = PostgresAssistantStore._validate_table_name(table_name)
         query = f"DELETE FROM {validated_table} WHERE assistant_id = $1 RETURNING *"
         async with pool.acquire() as conn:
             row = await conn.fetchrow(query, assistant_id)

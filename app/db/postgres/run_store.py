@@ -4,8 +4,8 @@ from typing import Optional, Dict, List, Literal, Any
 # Schema
 from app.schemas.runs import RunStatus
 # Exception
-from app.exceptions.thread import ThreadNotFoundException
-from app.exceptions.run import RunNotFoundException
+from app.exceptions.threads import ThreadNotFoundException
+from app.exceptions.runs import RunNotFoundException
 # Other components
 import asyncpg, json
 

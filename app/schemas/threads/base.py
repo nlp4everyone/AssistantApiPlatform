@@ -1,5 +1,5 @@
-from typing import Dict, Any, Union
-from pydantic import BaseModel
+from typing import Dict, Any
+from pydantic import BaseModel, Field
 from app.schemas.assistants.tools import ToolResource
 
 class ThreadObject(BaseModel):
@@ -7,4 +7,4 @@ class ThreadObject(BaseModel):
     object: str = "thread"
     created_at: int
     metadata: Dict[str, Any] = {}
-    tool_resources: Union[ToolResource, dict] = {}
+    tool_resources: ToolResource = Field(default_factory=ToolResource)

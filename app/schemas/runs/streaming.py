@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Literal
 from pydantic import BaseModel
 
 class Annotation(BaseModel):
@@ -17,3 +17,8 @@ class TextDeltaBlock(BaseModel):
 
 class MessageDelta(BaseModel):
     content: List[TextDeltaBlock]
+
+class MessageDeltaEvent(BaseModel):
+    id: str
+    object: Literal["thread.message.delta"] = "thread.message.delta"
+    delta: MessageDelta

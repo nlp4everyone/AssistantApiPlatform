@@ -1,8 +1,8 @@
 from typing import Any
 from fastapi import status
-from app.exceptions.base_exception import BaseException, BaseResponse
+from app.exceptions.base_exception import AppException, BaseResponse
 
-class InvalidIdFormatException(BaseException):
+class InvalidIdFormatException(AppException):
     def __init__(self,
                  input :str,
                  type: str = "invalid_request_error",

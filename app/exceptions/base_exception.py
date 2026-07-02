@@ -7,7 +7,7 @@ class BaseResponse(BaseModel):
     params :Any = None
     code :Any = None
 
-class BaseException(Exception):
+class AppException(Exception):
     def __init__(self, status_code: int, response: BaseResponse):
         self.status_code = status_code
         self.response = response

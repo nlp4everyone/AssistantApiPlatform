@@ -17,7 +17,7 @@ from app.exceptions import InvalidIdFormatException
 # Postgres Components
 from app.startup import get_postgres_pool, get_model
 from app.db.postgres import PostgresThreadStore, PostgresMessageStore
-from app.db.postgres import AssistantStore
+from app.db.postgres import PostgresAssistantStore
 # Utils
 from app.utils.id_generation import generate_assistant_object
 from app.services.streaming import handle_streaming_response
@@ -90,7 +90,7 @@ async def create_thread(payload: CreateThreadRequest = Body(default = CreateThre
         await PostgresThreadStore.insert_thread(pool = postgres_pool,
                                                 thread_id = thread_id,
                                                 metadata = payload.metadata,
-                                                tool_resources = payload.tool_resources if isinstance(payload.tool_resources,dict) else payload.tool_resources.model_dump())
+                                                tool_resources = payload.tool_resources.model_dump())
 
         # Add message if has message
         if len(output_messages) > 0:
@@ -143,7 +143,7 @@ async def create_thread_and_run(request: CreateThreadRunRequest,
         await PostgresThreadStore.insert_thread(pool = postgres_pool,
                                                 thread_id = thread_id)
         # Get assistant info
-        assistant_info = await AssistantStore.get_assistant(pool = postgres_pool,
+        assistant_info = await PostgresAssistantStore.get_assistant(pool = postgres_pool,
                                                             assistant_id = request.assistant_id)
         # Normalize ssistant info
         assistant_objects = _update_assistant_response([assistant_info])

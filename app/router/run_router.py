@@ -8,9 +8,9 @@ from app.schemas.runs.requests import CreateRunRequest
 # Exceptions
 from app.exceptions import InvalidIdFormatException
 from app.exceptions.postgres import PostgresConnectionException
-from app.exceptions.thread import ThreadNotFoundException
+from app.exceptions.threads import ThreadNotFoundException
 # DB
-from app.db.postgres import AssistantStore, PostgresThreadStore, PostgresRunStore
+from app.db.postgres import PostgresAssistantStore, PostgresThreadStore, PostgresRunStore
 from app.startup import get_postgres_pool, get_model
 # Utils
 from app.utils.id_generation import generate_assistant_object
@@ -69,7 +69,7 @@ async def create_run(thread_id: str = Path(..., description="The ID of the threa
                                                     thread_id = thread_id)
 
         # Get assistant info
-        assistant_info = await AssistantStore.get_assistant(pool = postgres_pool,
+        assistant_info = await PostgresAssistantStore.get_assistant(pool = postgres_pool,
                                                             assistant_id = request.assistant_id)
 
         # Normalize ssistant info
