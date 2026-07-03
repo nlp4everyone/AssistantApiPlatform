@@ -1,6 +1,5 @@
 [api]
 FASTAPI_API_KEY = "token"
-SERVING_SERVICE_NAME = "vllm"
 
 [redis]
 REDIS_URL = "redis://redis:6379"

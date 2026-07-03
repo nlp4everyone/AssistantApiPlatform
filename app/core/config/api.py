@@ -6,7 +6,7 @@ api_config = toml_config.get_section("api")
 
 # API keys from TOML
 FASTAPI_API_KEY = api_config.get("FASTAPI_API_KEY")
-SERVING_SERVICE_NAME = api_config.get("SERVING_SERVICE_NAME")
 
-# SERVING_API_KEY from environment (needed for Docker compose)
+# LLM serving connection (external OpenAI-compatible server, e.g. vLLM/SGLang)
 SERVING_API_KEY = os.getenv("SERVING_API_KEY")
+LLM_BASE_URL = os.getenv("LLM_BASE_URL")

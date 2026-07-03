@@ -20,15 +20,14 @@ os.environ["AWS_SECRET_ACCESS_KEY"] = MINIO_ROOT_PASSWORD
 os.environ["MLFLOW_S3_ENDPOINT_URL"] = MLFLOW_S3_ENDPOINT_URL
 os.environ["MLFLOW_DEFAULT_ARTIFACT_ROOT"] = MLFLOW_DEFAULT_ARTIFACT_ROOT
 
-async def init_model(serving_service_name :str = "vllm",
-                     port :int = 8000):
+async def init_model(base_url :str = None):
     """
     Initialize the LLM model connection.
-    
+
     Args:
-        serving_service_name (str): Name of the serving service (default: "vllm")
-        port (int): Port number for the service (default: 8000)
-    
+        base_url (str): OpenAI-compatible base URL for the LLM serving endpoint
+                        (default: LLM_BASE_URL from environment)
+
     Returns:
         AsyncOpenAI: Initialized LLM client instance
 
@@ -36,7 +35,8 @@ async def init_model(serving_service_name :str = "vllm",
         Tests the connection with a sample message and logs the result.
     """
     global llm
-    llm = AsyncOpenAI(base_url = f"http://{serving_service_name}:{port}/v1",
+    base_url = base_url or LLM_BASE_URL
+    llm = AsyncOpenAI(base_url = base_url,
                       api_key = SERVING_API_KEY)
 
     try:
@@ -46,10 +46,10 @@ async def init_model(serving_service_name :str = "vllm",
             extra_body = LLM_EXTRA_BODY
         )
         # Response
-        SystemLogger.warning(f"[STARTUP] {serving_service_name.capitalize()} service connection test successful")
+        SystemLogger.warning(f"[STARTUP] LLM serving connection test successful ({base_url})")
     except Exception as e:
         # Response
-        SystemLogger.error(f"[STARTUP] {serving_service_name.capitalize()} service connection test failed: {e}")
+        SystemLogger.error(f"[STARTUP] LLM serving connection test failed ({base_url}): {e}")
     return llm
 
 def init_postgres():
@@ -135,29 +135,29 @@ def get_postgres_pool():
     """
     return postgres_client.pool
 
-def wait_for_serving(serving_service_name :str = "vllm",
-                     serving_port :int = 8000,
+def wait_for_serving(base_url :str = None,
                      wait_time :int = 5):
     """
     Wait for the serving service to become available.
-    
+
     Args:
-        serving_service_name (str): Name of the serving service (default: "vllm")
-        serving_port (int): Port number for the service (default: 8000)
+        base_url (str): OpenAI-compatible base URL for the LLM serving endpoint
+                        (default: LLM_BASE_URL from environment)
         wait_time (int): Time to wait between retries in seconds (default: 5)
-        
+
     Note:
         Blocks until the service health endpoint returns 200 status.
         Polls indefinitely until successful connection.
     """
-    # Define url
-    serving_url = f"http://{serving_service_name}:{serving_port}"
+    # Health endpoint lives at the server root, not under /v1
+    base_url = base_url or LLM_BASE_URL
+    health_url = base_url.rsplit("/v1", 1)[0].rstrip("/") + "/health"
 
     # Loop
     while True:
         # Try to send response
         try:
-            response = requests.get(f"{serving_url}/health")
+            response = requests.get(health_url)
             if response.status_code == 200:
                 return
         except requests.exceptions.ConnectionError:

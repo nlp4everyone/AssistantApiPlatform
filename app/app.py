@@ -56,12 +56,10 @@ async def startup_event():
     SystemLogger.info("[APP] Starting application warm up...")
     # Start
     start = time.perf_counter()
-    # # Wait until vllm done
-    wait_for_serving(serving_service_name = SERVING_SERVICE_NAME,
-                     serving_port = 8000) # Default port for vLLM
+    # # Wait until the LLM serving endpoint is ready
+    wait_for_serving()
     # # Init ml model
-    await init_model(serving_service_name = SERVING_SERVICE_NAME,
-                     port = 8000) # Default port for vLLM
+    await init_model()
     SystemLogger.info("[APP] ✅ Serving LLM ready")
     # Init Postgres
     postgres_client = init_postgres()

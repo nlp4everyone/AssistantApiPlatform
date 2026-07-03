@@ -147,7 +147,7 @@ ChatEngine/
 # 🚀 Services:
 The application runs multiple services via Docker Compose:
 1. **FastAPI Web Application**: Main API server
-2. **vLLM Server**: Local LLM inference server
+2. **LLM Server**: External OpenAI-compatible inference server (e.g. vLLM/SGLang), connected via `LLM_BASE_URL`
 3. **PostgreSQL**: Database for user management and chat history
 4. **Redis**: Message broker for background tasks
 5. **TaskIQ Worker**: Background task processor
