@@ -1,5 +1,5 @@
-# Langchain component
-from langchain_openai import ChatOpenAI
+# OpenAI-compatible client
+from openai import AsyncOpenAI
 from app.db.postgres import PostgresClient
 from app.db.minio import MinioService
 # Postgres
@@ -30,22 +30,21 @@ async def init_model(serving_service_name :str = "vllm",
         port (int): Port number for the service (default: 8000)
     
     Returns:
-        ChatOpenAI: Initialized LLM model instance
-        
+        AsyncOpenAI: Initialized LLM client instance
+
     Note:
         Tests the connection with a sample message and logs the result.
     """
     global llm
-    llm = ChatOpenAI(model = LLM_MODEL_NAME,
-                     base_url = f"http://{serving_service_name}:{port}/v1",
-                     streaming = True,
-                     api_key = SERVING_API_KEY,
-                     extra_body={
-                         "chat_template_kwargs": {"enable_thinking": False}
-                     })
+    llm = AsyncOpenAI(base_url = f"http://{serving_service_name}:{port}/v1",
+                      api_key = SERVING_API_KEY)
 
     try:
-        resp = await llm.ainvoke("Hello")
+        await llm.chat.completions.create(
+            model = LLM_MODEL_NAME,
+            messages = [{"role": "user", "content": "Hello"}],
+            extra_body = LLM_EXTRA_BODY
+        )
         # Response
         SystemLogger.warning(f"[STARTUP] {serving_service_name.capitalize()} service connection test successful")
     except Exception as e:
@@ -115,9 +114,9 @@ def init_minio():
 def get_model():
     """
     Get the globally initialized LLM model instance.
-    
+
     Returns:
-        ChatOpenAI: The initialized LLM model
+        AsyncOpenAI: The initialized LLM client
         
     Raises:
         NameError: If model has not been initialized

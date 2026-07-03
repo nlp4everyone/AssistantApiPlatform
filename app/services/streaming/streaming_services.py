@@ -6,12 +6,11 @@ from app.schemas.runs.models import TokenUsage
 from app.db.postgres import PostgresRunStore, PostgresMessageStore
 # Utils
 from app.utils.events import EventManager
-from app.utils.messaging import (_convert_to_message_objects,
-                                 _convert_to_langchain_messages,
-                                 convert_langchain_to_chat_messages)
-# Langchain imports
-from langchain_openai import ChatOpenAI
-from langchain_core.messages import SystemMessage
+from app.utils.messaging import _convert_to_message_objects, _to_openai_messages
+# Config
+from app.core.config import LLM_MODEL_NAME, LLM_EXTRA_BODY
+# OpenAI client
+from openai import AsyncOpenAI
 # Token counter
 from app.utils.token_counter import approximate_count_tokens
 # Typing
@@ -27,7 +26,7 @@ from mlflow.entities import SpanType
 mlflow.config.enable_async_logging()
 
 async def handle_streaming_response(postgres_pool: asyncpg.Pool,
-                                    llm: ChatOpenAI,
+                                    llm: AsyncOpenAI,
                                     request: dict,
                                     thread_id: str,
                                     run_id: str,
@@ -39,11 +38,11 @@ async def handle_streaming_response(postgres_pool: asyncpg.Pool,
                                     top_p: float = None,
                                     endpoint_path :str = None) -> AsyncIterable:
     """
-    Handle streaming response using ChatOpenAI directly instead of LangGraph.
-    
+    Handle streaming response using the OpenAI-compatible client directly.
+
     Args:
         postgres_pool: Database connection pool
-        llm: ChatOpenAI instance for generation
+        llm: AsyncOpenAI instance for generation
         request: Request dictionary
         thread_id: Thread identifier
         run_id: Run identifier  
@@ -84,7 +83,7 @@ async def handle_streaming_response(postgres_pool: asyncpg.Pool,
 
 
 async def stream_response_from_messages(postgres_pool: asyncpg.Pool,
-                                        llm: ChatOpenAI,
+                                        llm: AsyncOpenAI,
                                         context_data: dict,
                                         thread_id: str,
                                         run_id: str,
@@ -95,11 +94,11 @@ async def stream_response_from_messages(postgres_pool: asyncpg.Pool,
                                         top_p: float = None,
                                         endpoint_path :str = None) -> AsyncIterable:
     """
-    Stream response from prepared messages using ChatOpenAI.
-    
+    Stream response from prepared messages using the OpenAI-compatible client.
+
     Args:
         postgres_pool: Database connection pool
-        llm: ChatOpenAI instance for generation
+        llm: AsyncOpenAI instance for generation
         context_data: Context data from prepare_generation_context
         thread_id: Thread identifier
         run_id: Run identifier
@@ -129,20 +128,23 @@ async def stream_response_from_messages(postgres_pool: asyncpg.Pool,
         yield event
     
     try:
-        # Convert to LangChain format
-        langchain_messages = _convert_to_langchain_messages(messages)
+        # Convert to OpenAI chat format
+        chat_messages = _to_openai_messages(messages)
         if final_instructions:
-            langchain_messages.insert(0, SystemMessage(content=final_instructions))
-        
+            chat_messages.insert(0, {"role": "system", "content": final_instructions})
+
         # Set LLM parameters - use passed parameters, falling back to request values
         final_temperature = temperature if temperature is not None else validated_request.temperature
         final_top_p = top_p if top_p is not None else validated_request.top_p
         max_completion_tokens = validated_request.max_completion_tokens
-        
-        llm.temperature = final_temperature
-        llm.top_p = final_top_p  
-        llm.max_tokens = max_completion_tokens
-        
+
+        # Build the request payload for generation
+        request_kwargs = {"model": LLM_MODEL_NAME, "max_tokens": max_completion_tokens, "extra_body": LLM_EXTRA_BODY}
+        if final_temperature is not None:
+            request_kwargs["temperature"] = final_temperature
+        if final_top_p is not None:
+            request_kwargs["top_p"] = final_top_p
+
         # Update status to running
         await PostgresRunStore.update_run_status(
             pool=postgres_pool,
@@ -153,7 +155,7 @@ async def stream_response_from_messages(postgres_pool: asyncpg.Pool,
         # Tracking with span
         with mlflow.start_span(name = endpoint_path, span_type=SpanType.CHAT_MODEL) as span:
             # Set input
-            span.set_inputs(convert_langchain_to_chat_messages(langchain_messages))
+            span.set_inputs(chat_messages)
 
             # Set tags on span
             mlflow.update_current_trace(tags = {"thread_id": thread_id,
@@ -161,15 +163,17 @@ async def stream_response_from_messages(postgres_pool: asyncpg.Pool,
                                                 "message_id": message_id,
                                                 "assistant_id": assistant_id})
 
-            # Stream response using ChatOpenAI
+            # Stream response using the OpenAI-compatible client
             response_chunks = []
             generation_start_time = time.perf_counter()
-            async for chunk in llm.astream(langchain_messages):
-                if chunk.content:
-                    response_chunks.append(chunk.content)
+            stream = await llm.chat.completions.create(messages=chat_messages, stream=True, **request_kwargs)
+            async for chunk in stream:
+                delta_content = chunk.choices[0].delta.content if chunk.choices else None
+                if delta_content:
+                    response_chunks.append(delta_content)
 
                     # Emit delta event using event manager
-                    yield event_manager.get_delta_event(chunk.content)
+                    yield event_manager.get_delta_event(delta_content)
             generation_time = time.perf_counter() - generation_start_time
             # Combine all chunks
             final_response = "".join(response_chunks)
@@ -182,10 +186,10 @@ async def stream_response_from_messages(postgres_pool: asyncpg.Pool,
 
             # Add attribute ( Config, Usage, Performance)
             throughput = completion_tokens / generation_time if generation_time > 0 else 0
-            span.set_attributes({"model_config": {"model_name": llm.model_name,
-                                                  "temperature": llm.temperature,
-                                                  "top_p": llm.top_p,
-                                                  "max_tokens": llm.max_tokens,
+            span.set_attributes({"model_config": {"model_name": LLM_MODEL_NAME,
+                                                  "temperature": final_temperature,
+                                                  "top_p": final_top_p,
+                                                  "max_tokens": max_completion_tokens,
                                                   "stream": True},
                                  "model_usage": {"prompt_tokens": prompt_tokens,
                                                  "completion_tokens": completion_tokens,

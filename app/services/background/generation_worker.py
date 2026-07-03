@@ -8,13 +8,13 @@ from app.db.postgres import PostgresRunStore
 from app.db.postgres import PostgresMessageStore
 # Utils
 from app.utils.token_counter import approximate_count_tokens
-from app.utils.messaging import convert_langchain_to_chat_messages
-from app.utils.messaging import _convert_to_message_objects, _convert_to_langchain_messages
+from app.utils.messaging import _convert_to_message_objects, _to_openai_messages
 # Common services
 from app.services.common import prepare_generation_context
-# Langchain imports
-from langchain_openai import ChatOpenAI
-from langchain_core.messages import SystemMessage
+# Config
+from app.core.config import LLM_MODEL_NAME, LLM_EXTRA_BODY
+# OpenAI client
+from openai import AsyncOpenAI
 # Logger
 from loggers import SystemLogger
 # External dependencies
@@ -25,7 +25,7 @@ from mlflow.entities import SpanType
 mlflow.config.enable_async_logging()
 
 async def generate_response_from_messages(postgres_pool: asyncpg.Pool,
-                                          llm: ChatOpenAI,
+                                          llm: AsyncOpenAI,
                                           messages: list,
                                           instructions: str,
                                           max_completion_tokens: int,
@@ -56,18 +56,18 @@ async def generate_response_from_messages(postgres_pool: asyncpg.Pool,
     Returns:
         list: Response messages
     """
-    # Configure the LLM with generation parameters
-    llm.max_tokens = max_completion_tokens
+    # Build the request payload for generation
+    request_kwargs = {"model": LLM_MODEL_NAME, "max_tokens": max_completion_tokens, "extra_body": LLM_EXTRA_BODY}
     if temperature is not None:
-        llm.temperature = temperature
+        request_kwargs["temperature"] = temperature
     if top_p is not None:
-        llm.top_p = top_p
+        request_kwargs["top_p"] = top_p
 
-    # Convert messages to LangChain format for LLM processing
-    langchain_messages = _convert_to_langchain_messages(messages)
+    # Convert messages to OpenAI chat format
+    chat_messages = _to_openai_messages(messages)
     # Add system instructions at the beginning if provided
     if instructions:
-        langchain_messages.insert(0, SystemMessage(content=instructions))
+        chat_messages.insert(0, {"role": "system", "content": instructions})
 
     # Update run status to indicate generation is in progress
     await PostgresRunStore.update_run_status(
@@ -79,41 +79,42 @@ async def generate_response_from_messages(postgres_pool: asyncpg.Pool,
     # Tracking with span
     with mlflow.start_span(name = endpoint_path, span_type = SpanType.CHAT_MODEL) as span:
         # Set input
-        span.set_inputs(convert_langchain_to_chat_messages(langchain_messages))
-        
+        span.set_inputs(chat_messages)
+
         # Set tags on span
         mlflow.update_current_trace(tags = {"thread_id": thread_id,
                                             "run_id": run_id,
                                             "message_id": message_id,
                                             "assistant_id": assistant_id})
-        
+
         # Generate response using the language model
         generation_start_time = time.perf_counter()
-        response = await llm.ainvoke(langchain_messages)
+        response = await llm.chat.completions.create(messages=chat_messages, **request_kwargs)
         generation_time = time.perf_counter() - generation_start_time
-        
+        response_content = response.choices[0].message.content
+
         # Convert response to ChatMessage format
-        response_message = ChatMessage(role="assistant", content=response.content).model_dump()
-        
+        response_message = ChatMessage(role="assistant", content=response_content).model_dump()
+
         # Count tokens
         prompt_tokens = approximate_count_tokens(messages)
         completion_tokens = approximate_count_tokens(response_message)
-        
+
         # Add attribute ( Config, Usage, Performance)
         throughput = completion_tokens / generation_time if generation_time > 0 else 0
-        span.set_attributes({"model_config": {"model_name": llm.model_name,
-                                              "temperature": llm.temperature,
-                                              "top_p": llm.top_p,
-                                              "max_tokens": llm.max_tokens,
+        span.set_attributes({"model_config": {"model_name": LLM_MODEL_NAME,
+                                              "temperature": temperature,
+                                              "top_p": top_p,
+                                              "max_tokens": max_completion_tokens,
                                               "stream": False},
                              "model_usage": {"prompt_tokens": prompt_tokens,
                                              "completion_tokens": completion_tokens,
                                              "total_tokens": prompt_tokens + completion_tokens},
                              "model_performance": {"latency": round(generation_time,2),
                                                    "throughput_tokens_per_second": round(throughput,1)}})
-        
+
         # Set output
-        span.set_outputs([{"role":"assistant","content": response.content}])
+        span.set_outputs([{"role":"assistant","content": response_content}])
 
     # Store the generated response in the database
     await PostgresMessageStore.insert_messages(
@@ -149,7 +150,7 @@ async def generate_response_from_messages(postgres_pool: asyncpg.Pool,
     return [response_message]
 
 async def handle_generation_response(postgres_pool: asyncpg.Pool,
-                                     llm: ChatOpenAI,
+                                     llm: AsyncOpenAI,
                                      request: dict,
                                      thread_id: str,
                                      run_id: str,

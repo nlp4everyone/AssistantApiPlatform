@@ -109,7 +109,7 @@ All examples connect to `http://localhost:8005/v1` by default. Customize `base_u
 <br />
 
 # 💴 Intergrations:
-- 📄 Framework: Langchain
+- 📄 Framework: OpenAI SDK
 - 💻 Core LLM: vLLM 
 - 🐥 Features: Same feature with OpenAI Assistant API (Refer: https://platform.openai.com/docs/api-reference/introduction)
 - 🗄️ User Management: Postgres
