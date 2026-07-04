@@ -1,6 +1,6 @@
 # Define schema
 from app.schemas.common import ChatMessage
-from app.schemas.runs import *
+from app.schemas.runs import RunStatus
 # Postgres DB
 from app.db.postgres import PostgresRunStore
 # Utils
@@ -138,7 +138,7 @@ async def stream_response_from_messages(postgres_pool: asyncpg.Pool,
         await PostgresRunStore.update_run_status(
             pool=postgres_pool,
             run_id=run_id,
-            status=RunStatus.RUNNING
+            status=RunStatus.IN_PROGRESS
         )
 
         # Tracking with span

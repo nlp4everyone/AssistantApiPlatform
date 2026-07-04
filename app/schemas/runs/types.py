@@ -2,7 +2,7 @@ from strenum import StrEnum
 
 class RunStatus(StrEnum):
     QUEUED = "queued"
-    RUNNING = "in_progress"
+    IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELED = "cancelled"

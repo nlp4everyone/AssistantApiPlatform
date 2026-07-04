@@ -77,31 +77,31 @@ class PostgresRunStore:
     @staticmethod
     async def update_run_status(pool: asyncpg.Pool,
                                 run_id: str,
-                                status: RunStatus = RunStatus.RUNNING) -> None:
+                                status: RunStatus = RunStatus.IN_PROGRESS) -> None:
         """
         Update run status and automatically set corresponding timestamp.
-        
+
         Args:
             pool: PostgreSQL connection pool
             run_id: ID of the run to update
-            status: New status to set (defaults to RUNNING)
-            
+            status: New status to set (defaults to IN_PROGRESS)
+
         Returns:
             None
-            
+
         Note:
             Certain status transitions automatically set timestamps:
-            - RUNNING → started_at
+            - IN_PROGRESS → started_at
             - COMPLETED → completed_at
             - FAILED → failed_at
             - CANCELED → cancelled_at
         """
         # Get current UTC timestamp for consistent timekeeping
         now = datetime.now(timezone.utc)
-        
+
         # Mapping of status transitions to their corresponding timestamp fields
         field_map = {
-            RunStatus.RUNNING: "started_at",
+            RunStatus.IN_PROGRESS: "started_at",
             RunStatus.COMPLETED: "completed_at",
             RunStatus.FAILED: "failed_at",
             RunStatus.CANCELED: "cancelled_at",
