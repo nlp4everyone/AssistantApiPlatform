@@ -1,6 +1,5 @@
 # FastAPI Components
 from fastapi import APIRouter, Path, Depends
-from fastapi.responses import StreamingResponse
 # Schema
 from app.schemas.common import PaginationQueryParams
 from app.schemas.runs import RunObject, RunListObject
@@ -10,23 +9,18 @@ from app.exceptions import InvalidIdFormatException
 from app.exceptions.postgres import PostgresConnectionException
 from app.exceptions.threads import ThreadNotFoundException
 # DB
-from app.db.postgres import PostgresAssistantStore, PostgresThreadStore, PostgresRunStore
+from app.db.postgres import PostgresThreadStore, PostgresRunStore
 from app.startup import get_postgres_pool, get_model
 # Utils
 from app.utils.id_generation import generate_assistant_object
-from app.utils.messaging import _update_assistant_response
-# Streaming
-from app.services.streaming import handle_streaming_response
+# Run dispatch
+from app.services.runs import resolve_run_params, dispatch_run
 # Other
-import asyncpg, socket, time, json
+import asyncpg, socket, json
 # Security
 from app.security.auth import verify_api_key
 # Logger
 from loggers import SystemLogger
-# Runner
-from taskiq_worker import run_background_llm
-# Config
-from app.core.config.prompts import DEFAULT_ASSISTANT_PROMPT
 
 # Router
 run_router = APIRouter()
@@ -68,56 +62,22 @@ async def create_run(thread_id: str = Path(..., description="The ID of the threa
         await PostgresThreadStore._is_thread_exists(pool = postgres_pool,
                                                     thread_id = thread_id)
 
-        # Get assistant info
-        assistant_info = await PostgresAssistantStore.get_assistant(pool = postgres_pool,
-                                                            assistant_id = request.assistant_id)
+        # Resolve instructions/temperature/top_p, falling back to the assistant's own config
+        instructions, temperature, top_p = await resolve_run_params(
+            postgres_pool, request.assistant_id, request.instructions, request.temperature, request.top_p)
 
-        # Normalize ssistant info
-        assistant_objects = _update_assistant_response([assistant_info])
-        assistant_info = assistant_objects[0]
-        instructions = request.instructions if request.instructions else assistant_info.instructions or DEFAULT_ASSISTANT_PROMPT
-        # Get output params for both streaming and non-streaming modes
-        temperature = request.temperature if isinstance(request.temperature, float) else assistant_info.temperature
-        top_p = request.top_p if isinstance(request.top_p, float) else assistant_info.top_p
-
-        if not request.stream:
-            # Run in background
-            await run_background_llm.kiq(thread_id,
-                                         run_id,
-                                         request,
-                                         request.assistant_id,
-                                         instructions,
-                                         message_id,
-                                         temperature,
-                                         top_p,
-                                         "/v1/threads/{thread_id}/runs")
-            # Not in stream mode
-            return RunObject(id = run_id,
-                             created_at = int(time.time()),
-                             assistant_id = request.assistant_id,
-                             thread_id = thread_id,
-                             status = "queued",
-                             model = request.model,
-                             completed_at = int(time.time()),
-                             temperature = temperature,
-                             top_p = top_p,
-                             max_prompt_tokens = request.max_prompt_tokens,
-                             max_completion_tokens = request.max_completion_tokens)
-
-        # Streaming
-        return StreamingResponse(handle_streaming_response(llm = llm,
-                                                           postgres_pool = postgres_pool,
-                                                           request = request.model_dump(),
-                                                           run_id = run_id,
-                                                           thread_id = thread_id,
-                                                           message_id = message_id,
-                                                           step_id = step_id,
-                                                           assistant_id = request.assistant_id,
-                                                           instructions = instructions,
-                                                           temperature = temperature,
-                                                           top_p = top_p,
-                                                           endpoint_path = "/v1/threads/{thread_id}/runs"),
-                                 media_type = "text/event-stream")
+        # Enqueue background generation or return a streaming response
+        return await dispatch_run(postgres_pool = postgres_pool,
+                                  llm = llm,
+                                  request = request,
+                                  thread_id = thread_id,
+                                  run_id = run_id,
+                                  step_id = step_id,
+                                  message_id = message_id,
+                                  instructions = instructions,
+                                  temperature = temperature,
+                                  top_p = top_p,
+                                  endpoint_path = "/v1/threads/{thread_id}/runs")
     except (asyncpg.PostgresError, socket.gaierror) as e:
         # Postgres connection error
         SystemLogger.error(f"[RUN_ROUTER] Failed to create run for thread {thread_id}: {e}")
