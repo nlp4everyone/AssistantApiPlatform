@@ -77,7 +77,7 @@ async def create_run(thread_id: str = Path(..., description="The ID of the threa
 
     try:
         # Check thread
-        await PostgresThreadStore._is_thread_exists(pool = postgres_pool,
+        await PostgresThreadStore.is_thread_exists(pool = postgres_pool,
                                                     thread_id = thread_id)
 
         # Resolve instructions/temperature/top_p, falling back to the assistant's own config

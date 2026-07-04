@@ -5,7 +5,7 @@ from app.schemas.runs import RunStatus, TokenUsage
 # Postgres DB
 from app.db.postgres import PostgresRunStore, PostgresMessageStore
 # Utils
-from app.utils.messaging import _convert_to_message_objects, _to_openai_messages
+from app.utils.messaging import convert_to_message_objects, to_openai_messages
 # Config
 from app.core.config import LLM_MODEL_NAME, LLM_EXTRA_BODY
 # Logger
@@ -14,7 +14,7 @@ from loggers import SystemLogger
 import asyncpg, mlflow
 
 
-def _build_chat_request(messages: list,
+def build_chat_request(messages: list,
                         instructions: Optional[str],
                         max_completion_tokens: int,
                         temperature: Optional[float],
@@ -25,7 +25,7 @@ def _build_chat_request(messages: list,
     Returns:
         tuple: (chat_messages, request_kwargs)
     """
-    chat_messages = _to_openai_messages(messages)
+    chat_messages = to_openai_messages(messages)
     if instructions:
         chat_messages.insert(0, {"role": "system", "content": instructions})
 
@@ -38,7 +38,7 @@ def _build_chat_request(messages: list,
     return chat_messages, request_kwargs
 
 
-def _tag_span(span,
+def tag_span(span,
               chat_messages: list,
               thread_id: str,
               run_id: str,
@@ -52,7 +52,7 @@ def _tag_span(span,
                                       "assistant_id": assistant_id})
 
 
-def _record_span_metrics(span,
+def record_span_metrics(span,
                          *,
                          temperature: Optional[float],
                          top_p: Optional[float],
@@ -77,7 +77,7 @@ def _record_span_metrics(span,
     span.set_outputs([{"role": "assistant", "content": response_content}])
 
 
-async def _persist_and_complete(postgres_pool: asyncpg.Pool,
+async def persist_and_complete(postgres_pool: asyncpg.Pool,
                                 *,
                                 thread_id: str,
                                 run_id: str,
@@ -91,7 +91,7 @@ async def _persist_and_complete(postgres_pool: asyncpg.Pool,
         pool=postgres_pool,
         thread_id=thread_id,
         data={
-            "data": _convert_to_message_objects(messages=[response_message], thread_id=thread_id, message_id=message_id),
+            "data": convert_to_message_objects(messages=[response_message], thread_id=thread_id, message_id=message_id),
             "assistant_id": assistant_id,
             "run_id": run_id
         }
@@ -116,7 +116,7 @@ async def _persist_and_complete(postgres_pool: asyncpg.Pool,
     mlflow.flush_async_logging()
 
 
-async def _fail_run(postgres_pool: asyncpg.Pool, run_id: str, error: Exception, log_tag: str) -> None:
+async def fail_run(postgres_pool: asyncpg.Pool, run_id: str, error: Exception, log_tag: str) -> None:
     """Log the failure and mark the run as failed."""
     SystemLogger.error(f"[{log_tag}] Run {run_id} failed: {error}")
     await PostgresRunStore.update_run_status(

@@ -61,7 +61,7 @@ class PostgresThreadStore:
         return None
 
     @staticmethod
-    async def _is_thread_exists(pool: asyncpg.Pool,
+    async def is_thread_exists(pool: asyncpg.Pool,
                                  thread_id: str):
         """
         Check if a thread exists in the database.

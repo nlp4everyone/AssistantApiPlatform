@@ -14,7 +14,7 @@ from app.db.postgres import PostgresAssistantStore
 from app.startup import get_postgres_pool
 # Utils
 from app.utils.id_generation import generate_assistant_object
-from app.utils.messaging.formatters import _update_assistant_response
+from app.utils.messaging.formatters import update_assistant_response
 # Security
 from app.security.auth import verify_api_key
 # Logger
@@ -107,7 +107,7 @@ async def list_assistants(request :PaginationQueryParams = Depends(),
         if len(selected_assistant_objects) == 0: return AssistantListObject(data = assistant_objects)
 
         # Update value to correct format
-        assistant_objects = _update_assistant_response([dict(assistant_object) for assistant_object in selected_assistant_objects])
+        assistant_objects = update_assistant_response([dict(assistant_object) for assistant_object in selected_assistant_objects])
         return AssistantListObject(data = assistant_objects,
                                    first_id = assistant_objects[0].id,
                                    last_id = assistant_objects[-1].id,
@@ -141,7 +141,7 @@ async def retrieve_assistant(assistant_id: str,
         res = await PostgresAssistantStore.get_assistant(pool = postgres_pool,
                                                  assistant_id = assistant_id)
         # *** Need to add try/catch***
-        assistant_objects = _update_assistant_response([res])
+        assistant_objects = update_assistant_response([res])
         # Return information
         return assistant_objects[0]
     except (asyncpg.PostgresError, socket.gaierror) as e:

@@ -15,7 +15,7 @@ from app.startup import get_postgres_pool, get_model
 from app.db.postgres import PostgresThreadStore, PostgresMessageStore
 # Utils
 from app.utils.id_generation import generate_assistant_object
-from app.utils.messaging import _build_content_items
+from app.utils.messaging import build_content_items
 # Run dispatch
 from app.services.runs import resolve_run_params, dispatch_run
 # Security
@@ -66,7 +66,7 @@ async def create_thread(payload: CreateThreadRequest = Body(default = CreateThre
             # Define value
             msg_id = generate_assistant_object(object = "message")
             # Content (string or content blocks)
-            content = _build_content_items(input_message.content)
+            content = build_content_items(input_message.content)
             # Append
             output_messages.append(MessageObject(id = msg_id,
                                                  created_at = created_at_seconds,
@@ -91,8 +91,6 @@ async def create_thread(payload: CreateThreadRequest = Body(default = CreateThre
     except (asyncpg.PostgresError, socket.gaierror) as e:
         SystemLogger.error(f"[THREAD_ROUTER] Failed to create thread {thread_id}: {e}")
         raise PostgresConnectionException()
-    except Exception as e:
-        SystemLogger.error(f"[THREAD_ROUTER] Unexpected error creating thread {thread_id}: {e}")
 
     # Return
     return ThreadObject(id = thread_id,

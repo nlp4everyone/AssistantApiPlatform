@@ -9,11 +9,11 @@ from app.schemas.runs.requests import CreateRunRequest, CreateThreadRunRequest
 # Typing
 from typing import Union, Tuple, List, Dict
 # Utilities
-from app.utils.messaging import _update_messages_response
+from app.utils.messaging import update_messages_response
 # Other components
 import asyncpg
 
-def _convert_to_chat_message(message) -> Dict[str, str]:
+def convert_to_chat_message(message) -> Dict[str, str]:
     """Helper to convert different message types to ChatMessage dict."""
     if hasattr(message, 'role') and hasattr(message, 'content'):
         if hasattr(message.content, '__iter__') and not isinstance(message.content, str):
@@ -24,7 +24,7 @@ def _convert_to_chat_message(message) -> Dict[str, str]:
             return ChatMessage(role=message.role, content=message.content).model_dump()
     return dict(message)
 
-async def _prepare_messages(request: Union[CreateRunRequest, CreateThreadRunRequest],
+async def prepare_messages(request: Union[CreateRunRequest, CreateThreadRunRequest],
                             postgres_pool: asyncpg.Pool,
                             thread_id: str,
                             instructions: str) -> Tuple[List[dict], List[dict], str]:
@@ -53,11 +53,11 @@ async def _prepare_messages(request: Union[CreateRunRequest, CreateThreadRunRequ
             order="asc"
         )
 
-        messages = [_convert_to_chat_message(msg) for msg in _update_messages_response(db_messages)]
+        messages = [convert_to_chat_message(msg) for msg in update_messages_response(db_messages)]
         
         # Include additional messages from request if provided
         if request.additional_messages:
-            additional_messages = [_convert_to_chat_message(msg) for msg in request.additional_messages]
+            additional_messages = [convert_to_chat_message(msg) for msg in request.additional_messages]
             messages.extend(additional_messages)
             external_messages = additional_messages
         else:

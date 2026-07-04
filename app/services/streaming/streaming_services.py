@@ -13,11 +13,11 @@ from app.utils.token_counter import approximate_count_tokens
 from typing import AsyncIterable
 # Common
 from app.services.common import (prepare_generation_context,
-                                 _build_chat_request,
-                                 _tag_span,
-                                 _record_span_metrics,
-                                 _persist_and_complete,
-                                 _fail_run)
+                                 build_chat_request,
+                                 tag_span,
+                                 record_span_metrics,
+                                 persist_and_complete,
+                                 fail_run)
 # Import dependencies
 import asyncpg, mlflow, time
 from mlflow.entities import SpanType
@@ -132,7 +132,7 @@ async def stream_response_from_messages(postgres_pool: asyncpg.Pool,
         final_top_p = top_p if top_p is not None else validated_request.top_p
         max_completion_tokens = validated_request.max_completion_tokens
 
-        chat_messages, request_kwargs = _build_chat_request(messages, final_instructions, max_completion_tokens, final_temperature, final_top_p)
+        chat_messages, request_kwargs = build_chat_request(messages, final_instructions, max_completion_tokens, final_temperature, final_top_p)
 
         # Update status to running
         await PostgresRunStore.update_run_status(
@@ -143,7 +143,7 @@ async def stream_response_from_messages(postgres_pool: asyncpg.Pool,
 
         # Tracking with span
         with mlflow.start_span(name = endpoint_path, span_type=SpanType.CHAT_MODEL) as span:
-            _tag_span(span, chat_messages, thread_id, run_id, message_id, assistant_id)
+            tag_span(span, chat_messages, thread_id, run_id, message_id, assistant_id)
 
             # Stream response using the OpenAI-compatible client
             response_chunks = []
@@ -166,7 +166,7 @@ async def stream_response_from_messages(postgres_pool: asyncpg.Pool,
             prompt_tokens = approximate_count_tokens(messages)
             completion_tokens = approximate_count_tokens(response_message)
 
-            _record_span_metrics(span,
+            record_span_metrics(span,
                                  temperature=final_temperature,
                                  top_p=final_top_p,
                                  max_completion_tokens=max_completion_tokens,
@@ -176,7 +176,7 @@ async def stream_response_from_messages(postgres_pool: asyncpg.Pool,
                                  generation_time=generation_time,
                                  response_content=final_response)
 
-        await _persist_and_complete(postgres_pool,
+        await persist_and_complete(postgres_pool,
                                     thread_id=thread_id,
                                     run_id=run_id,
                                     assistant_id=assistant_id,
@@ -202,7 +202,7 @@ async def stream_response_from_messages(postgres_pool: asyncpg.Pool,
         yield event_manager.get_done_event()
 
     except Exception as e:
-        await _fail_run(postgres_pool, run_id, e, "STREAMING_SERVICE")
+        await fail_run(postgres_pool, run_id, e, "STREAMING_SERVICE")
 
 
 

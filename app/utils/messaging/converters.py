@@ -8,7 +8,7 @@ from app.utils.id_generation import generate_assistant_object
 # Other components
 import time
 
-def _build_content_items(content: Union[str, List[ContentBlock]]) -> List[ContentItem]:
+def build_content_items(content: Union[str, List[ContentBlock]]) -> List[ContentItem]:
     """Convert a ChatMessage content field (string or content blocks) into ContentItem list."""
     if isinstance(content, str):
         return [ContentItem(text=MessageTextContent(value=content))]
@@ -24,7 +24,7 @@ def _build_content_items(content: Union[str, List[ContentBlock]]) -> List[Conten
     return items
 
 
-def _convert_to_message_objects(messages: List[Dict[str, str]],
+def convert_to_message_objects(messages: List[Dict[str, str]],
                                 thread_id: str,
                                 message_id: str = None) -> List[Dict]:
     """Convert message dictionaries to MessageObject format."""
@@ -49,7 +49,7 @@ def _convert_to_message_objects(messages: List[Dict[str, str]],
     return final_data
 
 
-def _to_openai_messages(messages: List[Dict[str, str]]) -> List[Dict[str, str]]:
+def to_openai_messages(messages: List[Dict[str, str]]) -> List[Dict[str, str]]:
     """Normalize message dictionaries into OpenAI chat completion message format."""
     output = []
     for message in messages:

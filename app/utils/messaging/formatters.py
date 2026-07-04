@@ -3,7 +3,7 @@ from typing import List, Dict, Any
 from app.schemas.messages import MessageObject
 from app.schemas.assistants.base import AssistantObject
 
-def _update_assistant_response(res: List[Dict[str, Any]]) -> List[AssistantObject]:
+def update_assistant_response(res: List[Dict[str, Any]]) -> List[AssistantObject]:
     """
     Update assistant response data with correct format types.
 
@@ -53,7 +53,7 @@ def _update_assistant_response(res: List[Dict[str, Any]]) -> List[AssistantObjec
     
     return assistant_objects
 
-def _update_messages_response(messages: List[Dict[str, Any]]) -> List[MessageObject]:
+def update_messages_response(messages: List[Dict[str, Any]]) -> List[MessageObject]:
     """
     Update and validate messages response data with correct format types.
 

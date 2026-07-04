@@ -3,7 +3,7 @@ from app.schemas.runs.requests import CreateRunRequest, CreateThreadRunRequest
 # Postgres DB
 from app.db.postgres import PostgresRunStore, PostgresMessageStore
 # Utils
-from app.utils.messaging import _prepare_messages, _convert_to_message_objects
+from app.utils.messaging import prepare_messages, convert_to_message_objects
 # Dependencies
 import asyncpg
 
@@ -43,7 +43,7 @@ async def prepare_generation_context(postgres_pool: asyncpg.Pool,
     )
     
     # Prepare messages and context
-    messages, external_messages, final_instructions = await _prepare_messages(
+    messages, external_messages, final_instructions = await prepare_messages(
         request=validated_request,
         thread_id=thread_id,
         postgres_pool=postgres_pool,
@@ -56,7 +56,7 @@ async def prepare_generation_context(postgres_pool: asyncpg.Pool,
             pool=postgres_pool,
             thread_id=thread_id,
             data={
-                "data": _convert_to_message_objects(messages=external_messages, thread_id=thread_id),
+                "data": convert_to_message_objects(messages=external_messages, thread_id=thread_id),
                 "assistant_id": assistant_id,
                 "run_id": run_id
             }

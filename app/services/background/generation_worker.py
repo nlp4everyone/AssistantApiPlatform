@@ -9,11 +9,11 @@ from app.db.postgres import PostgresRunStore
 from app.utils.token_counter import approximate_count_tokens
 # Common services
 from app.services.common import (prepare_generation_context,
-                                 _build_chat_request,
-                                 _tag_span,
-                                 _record_span_metrics,
-                                 _persist_and_complete,
-                                 _fail_run)
+                                 build_chat_request,
+                                 tag_span,
+                                 record_span_metrics,
+                                 persist_and_complete,
+                                 fail_run)
 # OpenAI client
 from openai import AsyncOpenAI
 # External dependencies
@@ -55,7 +55,7 @@ async def generate_response_from_messages(postgres_pool: asyncpg.Pool,
     Returns:
         list: Response messages
     """
-    chat_messages, request_kwargs = _build_chat_request(messages, instructions, max_completion_tokens, temperature, top_p)
+    chat_messages, request_kwargs = build_chat_request(messages, instructions, max_completion_tokens, temperature, top_p)
 
     # Update run status to indicate generation is in progress
     await PostgresRunStore.update_run_status(
@@ -66,7 +66,7 @@ async def generate_response_from_messages(postgres_pool: asyncpg.Pool,
 
     # Tracking with span
     with mlflow.start_span(name = endpoint_path, span_type = SpanType.CHAT_MODEL) as span:
-        _tag_span(span, chat_messages, thread_id, run_id, message_id, assistant_id)
+        tag_span(span, chat_messages, thread_id, run_id, message_id, assistant_id)
 
         # Generate response using the language model
         generation_start_time = time.perf_counter()
@@ -81,7 +81,7 @@ async def generate_response_from_messages(postgres_pool: asyncpg.Pool,
         prompt_tokens = approximate_count_tokens(messages)
         completion_tokens = approximate_count_tokens(response_message)
 
-        _record_span_metrics(span,
+        record_span_metrics(span,
                              temperature=temperature,
                              top_p=top_p,
                              max_completion_tokens=max_completion_tokens,
@@ -91,7 +91,7 @@ async def generate_response_from_messages(postgres_pool: asyncpg.Pool,
                              generation_time=generation_time,
                              response_content=response_content)
 
-    await _persist_and_complete(postgres_pool,
+    await persist_and_complete(postgres_pool,
                                 thread_id=thread_id,
                                 run_id=run_id,
                                 assistant_id=assistant_id,
@@ -178,7 +178,7 @@ async def handle_generation_response(postgres_pool: asyncpg.Pool,
         )
 
     except Exception as e:
-        await _fail_run(postgres_pool, run_id, e, "GENERATION_WORKER")
+        await fail_run(postgres_pool, run_id, e, "GENERATION_WORKER")
 
 
 

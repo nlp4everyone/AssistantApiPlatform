@@ -8,7 +8,7 @@ from app.schemas.runs.requests import CreateRunRequest, CreateThreadRunRequest
 # Postgres DB
 from app.db.postgres import PostgresAssistantStore
 # Utils
-from app.utils.messaging import _update_assistant_response
+from app.utils.messaging import update_assistant_response
 # Streaming
 from app.services.streaming import handle_streaming_response
 # TaskIQ worker
@@ -30,7 +30,7 @@ async def resolve_run_params(postgres_pool: asyncpg.Pool,
     own configuration (and the default prompt) when the request does not set them.
     """
     assistant_info = await PostgresAssistantStore.get_assistant(pool=postgres_pool, assistant_id=assistant_id)
-    assistant_info = _update_assistant_response([assistant_info])[0]
+    assistant_info = update_assistant_response([assistant_info])[0]
 
     instructions = request_instructions if request_instructions else assistant_info.instructions or DEFAULT_ASSISTANT_PROMPT
     temperature = request_temperature if isinstance(request_temperature, float) else assistant_info.temperature

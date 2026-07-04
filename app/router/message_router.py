@@ -15,7 +15,7 @@ from app.startup import get_postgres_pool
 from app.db.postgres import PostgresMessageStore
 # Utils
 from app.utils.id_generation import generate_assistant_object
-from app.utils.messaging import _update_messages_response, _build_content_items
+from app.utils.messaging import update_messages_response, build_content_items
 import time, asyncpg, socket
 # Security
 from app.security.auth import verify_api_key
@@ -55,7 +55,7 @@ async def create_message(thread_id: str,
     created_at_seconds = int(time.time())
 
     # Process content based on type (string or content blocks)
-    content = _build_content_items(message.content)
+    content = build_content_items(message.content)
 
     # Handle attachments
     attachments = message.attachments if message.attachments else []
@@ -122,7 +122,7 @@ async def list_messages(thread_id :str,
         # No messages
         if len(messages) == 0: return MessageListObject(data = [])
         # Have messages
-        messages_object = _update_messages_response(messages)
+        messages_object = update_messages_response(messages)
         # Return messages
         return MessageListObject(data = messages_object,
                                  first_id = messages_object[0].id,
