@@ -4,9 +4,7 @@ from fastapi import APIRouter, Depends, Body
 from app.schemas.threads import (ThreadObject,
                                  CreateThreadRequest,
                                  DeletedThreadResponse)
-from app.schemas.messages import (MessageTextContent,
-                                  ContentItem,
-                                  MessageObject)
+from app.schemas.messages import MessageObject
 from app.schemas.runs.requests import CreateThreadRunRequest
 # Exception
 from app.exceptions.postgres import PostgresConnectionException
@@ -17,6 +15,7 @@ from app.startup import get_postgres_pool, get_model
 from app.db.postgres import PostgresThreadStore, PostgresMessageStore
 # Utils
 from app.utils.id_generation import generate_assistant_object
+from app.utils.messaging import _build_content_items
 # Run dispatch
 from app.services.runs import resolve_run_params, dispatch_run
 # Security
@@ -66,9 +65,8 @@ async def create_thread(payload: CreateThreadRequest = Body(default = CreateThre
         for input_message in payload.messages:
             # Define value
             msg_id = generate_assistant_object(object = "message")
-            # Text content
-            text_content = MessageTextContent(value = input_message.content)
-            content = [ContentItem(text = text_content)]
+            # Content (string or content blocks)
+            content = _build_content_items(input_message.content)
             # Append
             output_messages.append(MessageObject(id = msg_id,
                                                  created_at = created_at_seconds,

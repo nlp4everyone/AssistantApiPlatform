@@ -5,9 +5,7 @@ from app.schemas.common import (ChatMessage,
                                 PaginationQueryParams)
 from app.schemas.messages import (MessageObject,
                                   MessageListObject,
-                                  ContentItem,
-                                  DeletedMessageResponse,
-                                  MessageTextContent)
+                                  DeletedMessageResponse)
 # Exceptions
 from app.exceptions.postgres import PostgresConnectionException
 from app.exceptions import InvalidIdFormatException
@@ -17,7 +15,7 @@ from app.startup import get_postgres_pool
 from app.db.postgres import PostgresMessageStore
 # Utils
 from app.utils.id_generation import generate_assistant_object
-from app.utils.messaging import _update_messages_response
+from app.utils.messaging import _update_messages_response, _build_content_items
 import time, asyncpg, socket
 # Security
 from app.security.auth import verify_api_key
@@ -56,26 +54,8 @@ async def create_message(thread_id: str,
     # Time in second
     created_at_seconds = int(time.time())
 
-    # Process content based on type
-    if isinstance(message.content, str):
-        # Simple string content
-        text_content = MessageTextContent(value = message.content)
-        content = [ContentItem(text = text_content)]
-    else:
-        # Array of content blocks
-        content = []
-        for block in message.content:
-            if block.type == "text":
-                text_content = MessageTextContent(value = block.text)
-                content.append(ContentItem(text = text_content))
-            elif block.type == "image_file":
-                # Handle image file content - convert to text content for now
-                text_content = MessageTextContent(value = f"[Image file: {block.file_id}]")
-                content.append(ContentItem(text = text_content))
-            elif block.type == "image_url":
-                # Handle image URL content - convert to text content for now
-                text_content = MessageTextContent(value = f"[Image URL: {block.image_url.get('url', '')}]")
-                content.append(ContentItem(text = text_content))
+    # Process content based on type (string or content blocks)
+    content = _build_content_items(message.content)
 
     # Handle attachments
     attachments = message.attachments if message.attachments else []
