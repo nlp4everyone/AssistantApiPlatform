@@ -2,21 +2,20 @@
 from typing import List, Dict
 # Object Schema
 from app.schemas.common import ChatMessage
-from app.schemas.runs import RunStatus, TokenUsage
+from app.schemas.runs import RunStatus
 # Postgres DB
 from app.db.postgres import PostgresRunStore
-from app.db.postgres import PostgresMessageStore
 # Utils
 from app.utils.token_counter import approximate_count_tokens
-from app.utils.messaging import _convert_to_message_objects, _to_openai_messages
 # Common services
-from app.services.common import prepare_generation_context
-# Config
-from app.core.config import LLM_MODEL_NAME, LLM_EXTRA_BODY
+from app.services.common import (prepare_generation_context,
+                                 _build_chat_request,
+                                 _tag_span,
+                                 _record_span_metrics,
+                                 _persist_and_complete,
+                                 _fail_run)
 # OpenAI client
 from openai import AsyncOpenAI
-# Logger
-from loggers import SystemLogger
 # External dependencies
 import asyncpg, mlflow, time
 from mlflow.entities import SpanType
@@ -56,18 +55,7 @@ async def generate_response_from_messages(postgres_pool: asyncpg.Pool,
     Returns:
         list: Response messages
     """
-    # Build the request payload for generation
-    request_kwargs = {"model": LLM_MODEL_NAME, "max_tokens": max_completion_tokens, "extra_body": LLM_EXTRA_BODY}
-    if temperature is not None:
-        request_kwargs["temperature"] = temperature
-    if top_p is not None:
-        request_kwargs["top_p"] = top_p
-
-    # Convert messages to OpenAI chat format
-    chat_messages = _to_openai_messages(messages)
-    # Add system instructions at the beginning if provided
-    if instructions:
-        chat_messages.insert(0, {"role": "system", "content": instructions})
+    chat_messages, request_kwargs = _build_chat_request(messages, instructions, max_completion_tokens, temperature, top_p)
 
     # Update run status to indicate generation is in progress
     await PostgresRunStore.update_run_status(
@@ -78,14 +66,7 @@ async def generate_response_from_messages(postgres_pool: asyncpg.Pool,
 
     # Tracking with span
     with mlflow.start_span(name = endpoint_path, span_type = SpanType.CHAT_MODEL) as span:
-        # Set input
-        span.set_inputs(chat_messages)
-
-        # Set tags on span
-        mlflow.update_current_trace(tags = {"thread_id": thread_id,
-                                            "run_id": run_id,
-                                            "message_id": message_id,
-                                            "assistant_id": assistant_id})
+        _tag_span(span, chat_messages, thread_id, run_id, message_id, assistant_id)
 
         # Generate response using the language model
         generation_start_time = time.perf_counter()
@@ -100,52 +81,24 @@ async def generate_response_from_messages(postgres_pool: asyncpg.Pool,
         prompt_tokens = approximate_count_tokens(messages)
         completion_tokens = approximate_count_tokens(response_message)
 
-        # Add attribute ( Config, Usage, Performance)
-        throughput = completion_tokens / generation_time if generation_time > 0 else 0
-        span.set_attributes({"model_config": {"model_name": LLM_MODEL_NAME,
-                                              "temperature": temperature,
-                                              "top_p": top_p,
-                                              "max_tokens": max_completion_tokens,
-                                              "stream": False},
-                             "model_usage": {"prompt_tokens": prompt_tokens,
-                                             "completion_tokens": completion_tokens,
-                                             "total_tokens": prompt_tokens + completion_tokens},
-                             "model_performance": {"latency": round(generation_time,2),
-                                                   "throughput_tokens_per_second": round(throughput,1)}})
+        _record_span_metrics(span,
+                             temperature=temperature,
+                             top_p=top_p,
+                             max_completion_tokens=max_completion_tokens,
+                             stream=False,
+                             prompt_tokens=prompt_tokens,
+                             completion_tokens=completion_tokens,
+                             generation_time=generation_time,
+                             response_content=response_content)
 
-        # Set output
-        span.set_outputs([{"role":"assistant","content": response_content}])
-
-    # Store the generated response in the database
-    await PostgresMessageStore.insert_messages(
-        pool=postgres_pool,
-        thread_id=thread_id,
-        data={
-            "data": _convert_to_message_objects(messages=[response_message], thread_id=thread_id, message_id=message_id),
-            "assistant_id": assistant_id,
-            "run_id": run_id
-        }
-    )
-
-    # Update run with token usage statistics
-    await PostgresRunStore.update_run_usage(
-        pool=postgres_pool,
-        run_id=run_id,
-        usage=TokenUsage(
-            prompt_tokens=prompt_tokens,
-            completion_tokens=completion_tokens,
-            total_tokens=prompt_tokens + completion_tokens
-        ).model_dump()
-    )
-
-    # Mark run as completed successfully
-    await PostgresRunStore.update_run_status(
-        pool=postgres_pool,
-        run_id=run_id,
-        status=RunStatus.COMPLETED
-    )
-    # Update state
-    mlflow.flush_async_logging()
+    await _persist_and_complete(postgres_pool,
+                                thread_id=thread_id,
+                                run_id=run_id,
+                                assistant_id=assistant_id,
+                                message_id=message_id,
+                                response_message=response_message,
+                                prompt_tokens=prompt_tokens,
+                                completion_tokens=completion_tokens)
 
     return [response_message]
 
@@ -225,13 +178,7 @@ async def handle_generation_response(postgres_pool: asyncpg.Pool,
         )
 
     except Exception as e:
-        # Log the error for debugging purposes
-        SystemLogger.error(f"[GENERATION_WORKER] Background generation failed for run {run_id}: {e}")
-        # Update run status to failed to indicate the error
-        await PostgresRunStore.update_run_status(
-            pool=postgres_pool,
-            run_id=run_id,
-            status=RunStatus.FAILED)
+        await _fail_run(postgres_pool, run_id, e, "GENERATION_WORKER")
 
 
 

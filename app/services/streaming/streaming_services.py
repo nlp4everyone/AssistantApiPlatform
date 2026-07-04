@@ -1,24 +1,23 @@
 # Define schema
 from app.schemas.common import ChatMessage
 from app.schemas.runs import *
-from app.schemas.runs.models import TokenUsage
 # Postgres DB
-from app.db.postgres import PostgresRunStore, PostgresMessageStore
+from app.db.postgres import PostgresRunStore
 # Utils
 from app.utils.events import EventManager
-from app.utils.messaging import _convert_to_message_objects, _to_openai_messages
-# Config
-from app.core.config import LLM_MODEL_NAME, LLM_EXTRA_BODY
 # OpenAI client
 from openai import AsyncOpenAI
 # Token counter
 from app.utils.token_counter import approximate_count_tokens
 # Typing
 from typing import AsyncIterable
-# Logger
-from loggers import SystemLogger
 # Common
-from app.services.common import prepare_generation_context
+from app.services.common import (prepare_generation_context,
+                                 _build_chat_request,
+                                 _tag_span,
+                                 _record_span_metrics,
+                                 _persist_and_complete,
+                                 _fail_run)
 # Import dependencies
 import asyncpg, mlflow, time
 from mlflow.entities import SpanType
@@ -128,22 +127,12 @@ async def stream_response_from_messages(postgres_pool: asyncpg.Pool,
         yield event
     
     try:
-        # Convert to OpenAI chat format
-        chat_messages = _to_openai_messages(messages)
-        if final_instructions:
-            chat_messages.insert(0, {"role": "system", "content": final_instructions})
-
         # Set LLM parameters - use passed parameters, falling back to request values
         final_temperature = temperature if temperature is not None else validated_request.temperature
         final_top_p = top_p if top_p is not None else validated_request.top_p
         max_completion_tokens = validated_request.max_completion_tokens
 
-        # Build the request payload for generation
-        request_kwargs = {"model": LLM_MODEL_NAME, "max_tokens": max_completion_tokens, "extra_body": LLM_EXTRA_BODY}
-        if final_temperature is not None:
-            request_kwargs["temperature"] = final_temperature
-        if final_top_p is not None:
-            request_kwargs["top_p"] = final_top_p
+        chat_messages, request_kwargs = _build_chat_request(messages, final_instructions, max_completion_tokens, final_temperature, final_top_p)
 
         # Update status to running
         await PostgresRunStore.update_run_status(
@@ -154,14 +143,7 @@ async def stream_response_from_messages(postgres_pool: asyncpg.Pool,
 
         # Tracking with span
         with mlflow.start_span(name = endpoint_path, span_type=SpanType.CHAT_MODEL) as span:
-            # Set input
-            span.set_inputs(chat_messages)
-
-            # Set tags on span
-            mlflow.update_current_trace(tags = {"thread_id": thread_id,
-                                                "run_id": run_id,
-                                                "message_id": message_id,
-                                                "assistant_id": assistant_id})
+            _tag_span(span, chat_messages, thread_id, run_id, message_id, assistant_id)
 
             # Stream response using the OpenAI-compatible client
             response_chunks = []
@@ -184,79 +166,43 @@ async def stream_response_from_messages(postgres_pool: asyncpg.Pool,
             prompt_tokens = approximate_count_tokens(messages)
             completion_tokens = approximate_count_tokens(response_message)
 
-            # Add attribute ( Config, Usage, Performance)
-            throughput = completion_tokens / generation_time if generation_time > 0 else 0
-            span.set_attributes({"model_config": {"model_name": LLM_MODEL_NAME,
-                                                  "temperature": final_temperature,
-                                                  "top_p": final_top_p,
-                                                  "max_tokens": max_completion_tokens,
-                                                  "stream": True},
-                                 "model_usage": {"prompt_tokens": prompt_tokens,
-                                                 "completion_tokens": completion_tokens,
-                                                 "total_tokens": prompt_tokens + completion_tokens},
-                                 "model_performance": {"latency": round(generation_time,2),
-                                                       "throughput_tokens_per_second": round(throughput,1)}})
+            _record_span_metrics(span,
+                                 temperature=final_temperature,
+                                 top_p=final_top_p,
+                                 max_completion_tokens=max_completion_tokens,
+                                 stream=True,
+                                 prompt_tokens=prompt_tokens,
+                                 completion_tokens=completion_tokens,
+                                 generation_time=generation_time,
+                                 response_content=final_response)
 
-
-            # Set output
-            span.set_outputs([{"role": "assistant", "content": final_response}])
-
-        # Store the complete response
-        await PostgresMessageStore.insert_messages(
-            pool=postgres_pool,
-            thread_id=thread_id,
-            data={
-                "data": _convert_to_message_objects(messages=[response_message], thread_id=thread_id, message_id=message_id),
-                "assistant_id": assistant_id,
-                "run_id": run_id
-            }
-        )
-
-
-        # Update run usage
-        await PostgresRunStore.update_run_usage(
-            pool=postgres_pool,
-            run_id=run_id,
-            usage=TokenUsage(
-                prompt_tokens=prompt_tokens,
-                completion_tokens=completion_tokens,
-                total_tokens=prompt_tokens + completion_tokens
-            ).model_dump()
-        )
-        
-        # Update final status
-        await PostgresRunStore.update_run_status(
-            pool=postgres_pool,
-            run_id=run_id,
-            status=RunStatus.COMPLETED
-        )
-
-        # Update state
-        mlflow.flush_async_logging()
+        await _persist_and_complete(postgres_pool,
+                                    thread_id=thread_id,
+                                    run_id=run_id,
+                                    assistant_id=assistant_id,
+                                    message_id=message_id,
+                                    response_message=response_message,
+                                    prompt_tokens=prompt_tokens,
+                                    completion_tokens=completion_tokens)
 
         # Emit message completed event using event manager
         yield event_manager.get_message_completed_event(final_response)
-        
+
         # Emit step completed event using event manager
         yield event_manager.get_step_completed_event(prompt_tokens, completion_tokens)
-        
+
         # Emit run completed event using event manager
         yield event_manager.get_run_completed_event(
             instructions=final_instructions,
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens
         )
-        
+
         # Signal completion using event manager
         yield event_manager.get_done_event()
-        
+
     except Exception as e:
-        SystemLogger.error(f"[STREAMING_SERVICE] Streaming generation failed for run {run_id}: {e}")
-        await PostgresRunStore.update_run_status(
-            pool=postgres_pool,
-            run_id=run_id,
-            status=RunStatus.FAILED
-        )
+        await _fail_run(postgres_pool, run_id, e, "STREAMING_SERVICE")
 
 
 
