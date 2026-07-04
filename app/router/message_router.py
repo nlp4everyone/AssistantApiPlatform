@@ -63,7 +63,7 @@ async def create_message(thread_id: str,
     # Handle metadata
     metadata = message.metadata if message.metadata else {}
 
-    # Save to MongoDB
+    # Save to Postgres
     message_object = MessageObject(id = generate_assistant_object(object = "message"),
                                    created_at = created_at_seconds,
                                    thread_id = thread_id,
