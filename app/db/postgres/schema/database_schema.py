@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS runs (
     id TEXT PRIMARY KEY,
     thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
     assistant_id TEXT REFERENCES assistants(assistant_id),
-    status TEXT NOT NULL CHECK (status IN ('queued', 'running', 'completed', 'failed', 'cancelled')),
+    status TEXT NOT NULL CHECK (status IN ('queued', 'in_progress', 'completed', 'failed', 'cancelled', 'expired')),
     started_at TIMESTAMPTZ,
     expires_at TIMESTAMPTZ,
     cancelled_at TIMESTAMPTZ,

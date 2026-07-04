@@ -15,6 +15,8 @@ from app.startup import get_postgres_pool, get_model
 from app.utils.id_generation import generate_assistant_object
 # Run dispatch
 from app.services.runs import resolve_run_params, dispatch_run
+# Typing
+from typing import Optional
 # Other
 import asyncpg, socket, json
 # Security
@@ -24,6 +26,22 @@ from loggers import SystemLogger
 
 # Router
 run_router = APIRouter()
+
+
+def _normalize_usage(usage) -> Optional[dict]:
+    """Coerce a raw `usage` DB value (JSON string, dict, or None) into a valid usage dict or None."""
+    if isinstance(usage, str):
+        try:
+            usage = json.loads(usage)
+        except (json.JSONDecodeError, TypeError):
+            return None
+    if not isinstance(usage, dict):
+        return None
+    if (usage.get("prompt_tokens") is not None and
+        usage.get("completion_tokens") is not None and
+        usage.get("total_tokens") is not None):
+        return usage
+    return None
 
 @run_router.post("/{thread_id}/runs",
                  summary = "[Run] Create a run")
@@ -123,27 +141,7 @@ async def list_runs(thread_id :str,
         if len(run_objects) == 0: return RunListObject(data = [])
         # Update usage first
         for obj in run_objects:
-            if isinstance(obj.get("usage"), str):
-                try:
-                    usage_data = json.loads(obj["usage"])
-                    # Check if usage data has all required fields
-                    if (isinstance(usage_data, dict) and 
-                        usage_data.get("prompt_tokens") is not None and
-                        usage_data.get("completion_tokens") is not None and
-                        usage_data.get("total_tokens") is not None):
-                        obj["usage"] = usage_data
-                    else:
-                        obj["usage"] = None
-                except (json.JSONDecodeError, TypeError):
-                    obj["usage"] = None
-            elif isinstance(obj.get("usage"), dict):
-                # Check if usage dict has all required fields
-                if (obj["usage"].get("prompt_tokens") is not None and
-                    obj["usage"].get("completion_tokens") is not None and
-                    obj["usage"].get("total_tokens") is not None):
-                    pass  # Keep the usage as is
-                else:
-                    obj["usage"] = None
+            obj["usage"] = _normalize_usage(obj.get("usage"))
 
         # Convert to BaseModel objects
         run_objects = [RunObject.model_validate(obj) for obj in run_objects]
@@ -189,27 +187,7 @@ async def retrieve_run(thread_id: str,
                                                     run_id = run_id)
 
         # Update usage first
-        if isinstance(run_object.get("usage"), str):
-            try:
-                usage_data = json.loads(run_object["usage"])
-                # Check if usage data has all required fields
-                if (isinstance(usage_data, dict) and 
-                    usage_data.get("prompt_tokens") is not None and
-                    usage_data.get("completion_tokens") is not None and
-                    usage_data.get("total_tokens") is not None):
-                    run_object["usage"] = usage_data
-                else:
-                    run_object["usage"] = None
-            except (json.JSONDecodeError, TypeError):
-                run_object["usage"] = None
-        elif isinstance(run_object.get("usage"), dict):
-            # Check if usage dict has all required fields
-            if (run_object["usage"].get("prompt_tokens") is not None and
-                run_object["usage"].get("completion_tokens") is not None and
-                run_object["usage"].get("total_tokens") is not None):
-                pass  # Keep the usage as is
-            else:
-                run_object["usage"] = None
+        run_object["usage"] = _normalize_usage(run_object.get("usage"))
 
         # Return run object
         return RunObject.model_validate(run_object)
