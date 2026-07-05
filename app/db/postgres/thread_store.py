@@ -5,6 +5,10 @@ from app.exceptions.threads import ThreadNotFoundException
 # Other components
 import asyncpg, json
 
+async def _check_thread_exists(conn: asyncpg.Connection, thread_id: str) -> bool:
+    """Check whether a thread exists, using an already-acquired connection."""
+    return await conn.fetchval("SELECT 1 FROM threads WHERE id = $1", thread_id) is not None
+
 class PostgresThreadStore:
     @staticmethod
     async def insert_thread(pool: asyncpg.Pool,
@@ -46,11 +50,8 @@ class PostgresThreadStore:
         """
         async with pool.acquire() as conn:
             # Check if thread exists at all
-            exists = await conn.fetchval(
-                "SELECT 1 FROM threads WHERE id = $1", thread_id
-            )
-            # Not existed thread
-            if not exists: raise ThreadNotFoundException(thread_id = thread_id)
+            if not await _check_thread_exists(conn, thread_id):
+                raise ThreadNotFoundException(thread_id = thread_id)
             row = await conn.fetchrow("SELECT id, metadata, tool_resources, created_at FROM threads WHERE id = $1", thread_id)
         if row:
             result = dict(row)
@@ -75,9 +76,8 @@ class PostgresThreadStore:
         """
         async with pool.acquire() as conn:
             # Ensure thread exists
-            exists = await conn.fetchval("SELECT 1 FROM threads WHERE id = $1", thread_id)
-            # Not found thread
-            if not exists: raise ThreadNotFoundException(thread_id=thread_id)
+            if not await _check_thread_exists(conn, thread_id):
+                raise ThreadNotFoundException(thread_id=thread_id)
 
     @staticmethod
     async def delete_thread(pool: asyncpg.Pool,
@@ -97,10 +97,7 @@ class PostgresThreadStore:
         """
         async with pool.acquire() as conn:
             # Check if thread exists at all
-            exists = await conn.fetchval(
-                "SELECT 1 FROM threads WHERE id = $1", thread_id
-            )
-            # Not existed thread
-            if not exists: raise ThreadNotFoundException(thread_id=thread_id)
+            if not await _check_thread_exists(conn, thread_id):
+                raise ThreadNotFoundException(thread_id=thread_id)
             result = await conn.execute("DELETE FROM threads WHERE id=$1", thread_id)
         return result.endswith("1")  # True if one thread deleted
