@@ -69,11 +69,11 @@ cp .env.sample .env
 ```
 4. Run services:
 ```
-bash run_service.sh
+make up
 ```
 5. View logs:
 ```
-bash view_log.sh
+make logs
 ```
 7. Access tracing view:
 ```
@@ -86,7 +86,7 @@ The `examples/` directory contains code samples for interacting with the ChatEng
 ## Quick Start:
 ```bash
 # Run services first
-bash run_service.sh
+make up
 
 # Install OpenAI client
 pip install openai
@@ -139,8 +139,7 @@ ChatEngine/
 ├── loggers/              # Logging configuration
 ├── requirements/         # Python dependencies
 ├── .env.sample          # Environment variables template
-├── run_service.sh       # Script to start all services
-└── view_log.sh          # Script to view service logs
+└── Makefile             # Targets to build/run/stop services and view logs
 ```
 <br />
 
