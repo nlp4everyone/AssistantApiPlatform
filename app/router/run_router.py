@@ -7,7 +7,6 @@ from app.schemas.runs.requests import CreateRunRequest
 # Exceptions
 from app.exceptions import InvalidIdFormatException
 from app.exceptions.postgres import PostgresConnectionException
-from app.exceptions.threads import ThreadNotFoundException
 # DB
 from app.db.postgres import PostgresThreadStore, PostgresRunStore
 from app.startup import get_postgres_pool, get_model
@@ -100,9 +99,6 @@ async def create_run(thread_id: str = Path(..., description="The ID of the threa
         # Postgres connection error
         SystemLogger.error(f"[RUN_ROUTER] Failed to create run for thread {thread_id}: {e}")
         raise PostgresConnectionException()
-    except ThreadNotFoundException as e:
-        SystemLogger.error(f"[RUN_ROUTER] Thread not found for run creation: {e}")
-        raise ThreadNotFoundException(thread_id = thread_id)
 
 @run_router.get("/{thread_id}/runs",
                 summary = "[Run] List thread runs",

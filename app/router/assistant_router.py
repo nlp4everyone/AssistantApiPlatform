@@ -44,8 +44,6 @@ async def create_assistant(request: CreateAssistantRequest,
         await PostgresAssistantStore.create_assistant(pool = postgres_pool,
                                               assistant_id = assistant_id,
                                               request = request)
-        # ***Check if specify vector store ids existed ( In tool resource)***
-        # ***Check only use for normal case ( Not RAG) and supported type in Assistant***
 
         # Return response
         return AssistantObject(id = assistant_id,
@@ -140,7 +138,6 @@ async def retrieve_assistant(assistant_id: str,
     try:
         res = await PostgresAssistantStore.get_assistant(pool = postgres_pool,
                                                  assistant_id = assistant_id)
-        # *** Need to add try/catch***
         assistant_objects = update_assistant_response([res])
         # Return information
         return assistant_objects[0]
