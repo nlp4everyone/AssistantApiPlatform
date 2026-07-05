@@ -42,7 +42,8 @@ CREATE TABLE IF NOT EXISTS messages (
     metadata JSONB DEFAULT '{}'::jsonb,
     created_at TIMESTAMPTZ DEFAULT now(),
     attachments JSONB DEFAULT '[]'::jsonb,
-    assistant_id TEXT
+    assistant_id TEXT,
+    seq BIGSERIAL -- monotonic tiebreak: now() is transaction-scoped, so batch inserts share one created_at
 );
 """
 
@@ -64,6 +65,7 @@ CREATE TABLE IF NOT EXISTS runs (
     max_completion_tokens INTEGER,
     usage JSONB DEFAULT '{}'::jsonb,
     metadata JSONB DEFAULT '{}'::jsonb,
-    created_at TIMESTAMPTZ DEFAULT now()
+    created_at TIMESTAMPTZ DEFAULT now(),
+    seq BIGSERIAL -- monotonic tiebreak for ordering/pagination, see messages.seq
 );
 """

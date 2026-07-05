@@ -194,16 +194,16 @@ class PostgresRunStore:
         params = [thread_id]
         idx = 2
 
-        # Add cursor-based pagination conditions
+        # Add cursor-based pagination conditions (seq, not created_at: see messages.seq)
         if after:
             # Fetch runs created after the specified cursor
-            conditions.append(f"r.created_at > (SELECT created_at FROM runs WHERE id = ${idx})")
+            conditions.append(f"r.seq > (SELECT seq FROM runs WHERE id = ${idx})")
             params.append(after)
             idx += 1
 
         if before:
             # Fetch runs created before the specified cursor
-            conditions.append(f"r.created_at < (SELECT created_at FROM runs WHERE id = ${idx})")
+            conditions.append(f"r.seq < (SELECT seq FROM runs WHERE id = ${idx})")
             params.append(before)
             idx += 1
 
@@ -216,7 +216,7 @@ class PostgresRunStore:
             FROM runs r
             LEFT JOIN assistants a ON r.assistant_id = a.assistant_id
             WHERE {where_clause}
-            ORDER BY r.created_at {order}
+            ORDER BY r.seq {order}
             LIMIT ${idx}
         """
         params.append(limit)

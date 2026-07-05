@@ -106,9 +106,13 @@ class PostgresClient:
                 await conn.execute(CREATE_THREADS_TABLE)
                 # Create message table
                 await conn.execute(CREATE_MESSAGES_TABLE)
+                # Backfill seq for tables created before this column existed
+                await conn.execute("ALTER TABLE messages ADD COLUMN IF NOT EXISTS seq BIGSERIAL")
                 # Create indexes
                 await conn.execute(CREATE_INDEXES)
                 # Create run table
                 await conn.execute(CREATE_RUN_TABLE)
+                # Backfill seq for tables created before this column existed
+                await conn.execute("ALTER TABLE runs ADD COLUMN IF NOT EXISTS seq BIGSERIAL")
                 # Create run indexes
                 await conn.execute(CREATE_RUN_INDEXES)

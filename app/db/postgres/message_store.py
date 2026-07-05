@@ -131,15 +131,16 @@ class PostgresMessageStore:
             params.append(run_id)
             idx += 1
 
-        # Add 'after' timestamp filter if specified
+        # Add 'after' cursor filter if specified (seq, not created_at: batch inserts
+        # share one created_at since now() is transaction-scoped, which breaks ordering/pagination)
         if after:
-            conditions.append(f"m.created_at > (SELECT created_at FROM messages WHERE id = ${idx})")
+            conditions.append(f"m.seq > (SELECT seq FROM messages WHERE id = ${idx})")
             params.append(after)
             idx += 1
 
-        # Add 'before' timestamp filter if specified
+        # Add 'before' cursor filter if specified
         if before:
-            conditions.append(f"m.created_at < (SELECT created_at FROM messages WHERE id = ${idx})")
+            conditions.append(f"m.seq < (SELECT seq FROM messages WHERE id = ${idx})")
             params.append(before)
             idx += 1
 
@@ -151,7 +152,7 @@ class PostgresMessageStore:
                 SELECT m.*
                 FROM messages m
                 WHERE {where_clause}
-                ORDER BY m.created_at {order}
+                ORDER BY m.seq {order}
                 LIMIT ${idx}
                 """
 
