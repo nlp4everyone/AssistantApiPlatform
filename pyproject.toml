@@ -22,7 +22,12 @@ dependencies = [
     "asyncpg==0.29.0",
     # Tracker
     "mlflow-skinny==3.1.4",
-    # S3
+    # mlflow's BaseMlflowSpanProcessor doesn't call super().__init__(), so it
+    # breaks on opentelemetry-sdk>=1.41 which requires self._metrics to be set
+    "opentelemetry-sdk<1.41",
+    "opentelemetry-api<1.41",
+    # S3 (used by mlflow's S3 artifact/trace exporter, not imported directly)
+    "boto3==1.40.50",
     "minio==7.2.17",
     # Token counter
     "tiktoken==0.9.0",
