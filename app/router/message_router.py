@@ -29,6 +29,7 @@ message_router = APIRouter()
                      response_model = MessageObject)
 async def create_message(thread_id: str,
                          message: ChatMessage,
+                         postgres_pool: asyncpg.Pool = Depends(get_postgres_pool),
                          api_key: str = Depends(verify_api_key)):
     """
     ## Create a message in a thread.
@@ -42,8 +43,6 @@ async def create_message(thread_id: str,
         - `attachments` (List[Attachment]): A list of files attached to the message, and the tools they should be added to.
         - `metadata` (Dict[str, str]): Set of 16 key-value pairs that can be attached to an object.
     """
-    # Postgres Service
-    postgres_pool = get_postgres_pool()
     # Check string format of thread id
     if not thread_id.startswith("thread"):
         raise InvalidIdFormatException(input = thread_id,
@@ -63,6 +62,7 @@ async def create_message(thread_id: str,
 async def list_messages(thread_id :str,
                         run_id: Optional[str] = None,
                         query_object :PaginationQueryParams = Depends(),
+                        postgres_pool: asyncpg.Pool = Depends(get_postgres_pool),
                         api_key: str = Depends(verify_api_key)):
     """
     ## List messages in a thread.
@@ -77,8 +77,6 @@ async def list_messages(thread_id :str,
         - `after` (Optional[str]): A cursor for use in pagination. `after` is an object ID that defines your place in the list. Default: None
         - `before` (Optional[str]): A cursor for use in pagination. `before` is an object ID that defines your place in the list. Default: None
     """
-    # Postgres Service
-    postgres_pool = get_postgres_pool()
     # Check string format of thread id
     if not thread_id.startswith("thread"):
         raise InvalidIdFormatException(input = thread_id, params = "thread_id")
@@ -101,6 +99,7 @@ async def list_messages(thread_id :str,
                     response_model = MessageObject)
 async def retrieve_message(thread_id: str,
                            message_id: str,
+                           postgres_pool: asyncpg.Pool = Depends(get_postgres_pool),
                            api_key: str = Depends(verify_api_key)):
     """
     ## Retrieve a message by its ID.
@@ -111,8 +110,6 @@ async def retrieve_message(thread_id: str,
         - `thread_id` (str): The ID of the thread that contains the message.
         - `message_id` (str): The ID of the message to retrieve.
     """
-    # Postgres Service
-    postgres_pool = get_postgres_pool()
     # Check string format of thread id
     if not thread_id.startswith("thread"):
         raise InvalidIdFormatException(input = thread_id, params = "thread_id")
@@ -134,6 +131,7 @@ async def retrieve_message(thread_id: str,
                        response_model = DeletedMessageResponse)
 async def delete_message(thread_id: str,
                          message_id: str,
+                         postgres_pool: asyncpg.Pool = Depends(get_postgres_pool),
                          api_key: str = Depends(verify_api_key)):
     """
     ## Delete a message by its ID.
@@ -144,8 +142,6 @@ async def delete_message(thread_id: str,
         - `thread_id` (str): The ID of the thread that contains the message.
         - `message_id` (str): The ID of the message to delete.
     """
-    # Postgres Service
-    postgres_pool = get_postgres_pool()
     # Check string format of thread id
     if not thread_id.startswith("thread"):
         raise InvalidIdFormatException(input = thread_id, params = "thread_id")

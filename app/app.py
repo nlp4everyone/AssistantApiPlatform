@@ -59,17 +59,18 @@ async def startup_event():
     # # Wait until the LLM serving endpoint is ready
     wait_for_serving()
     # # Init ml model
-    await init_model()
+    app.state.llm = await init_model()
     SystemLogger.info("[APP] ✅ Serving LLM ready")
     # Init Postgres
     postgres_client = init_postgres()
+    app.state.postgres_client = postgres_client
     # Create pool and wait for postgres
     await postgres_client._create_pool()
     await wait_for_postgres(postgres_client.pool)
     # Create table if not existed
     await postgres_client._create_table()
     # Init Minio
-    init_minio()
+    app.state.minio_service = init_minio()
     SystemLogger.info("[APP] ✅ MinIO ready")
 
     # Logging

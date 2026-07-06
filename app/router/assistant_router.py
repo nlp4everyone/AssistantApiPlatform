@@ -25,15 +25,13 @@ assistant_router = APIRouter()
                        summary = "[Assistant] Create an assistant",
                        response_model = AssistantObject)
 async def create_assistant(request: CreateAssistantRequest,
+                           postgres_pool: asyncpg.Pool = Depends(get_postgres_pool),
                            api_key: str = Depends(verify_api_key)):
     """
     ## Create an assistant with a model and instructions.
-    
+
     Reference: [OpenAI Create Assistant API](https://platform.openai.com/docs/api-reference/assistants/createAssistant)
     """
-    # Pool
-    postgres_pool = get_postgres_pool()
-
     try:
         return await AssistantService.create_assistant(postgres_pool = postgres_pool, request = request)
     except (asyncpg.PostgresError, socket.gaierror) as e:
@@ -45,20 +43,19 @@ async def create_assistant(request: CreateAssistantRequest,
                       summary = "[Assistant] List all assistants",
                       response_model = AssistantListObject)
 async def list_assistants(request :PaginationQueryParams = Depends(),
+                          postgres_pool: asyncpg.Pool = Depends(get_postgres_pool),
                           api_key: str = Depends(verify_api_key)):
     """
     ## Returns a list of assistants.
-    
+
     Reference: [OpenAI List Assistants API](https://platform.openai.com/docs/api-reference/assistants/listAssistants)
-    
+
     ### Args
         - `limit` (int, optional): A limit on the number of objects to be returned. Limit can range between 1 and 100, and the default is 20.
         - `order` (str, optional): Sort order by the `created_at` timestamp of the objects. `asc` for ascending order and `desc` for descending order.
         - `after` (str, optional): A cursor for use in pagination. `after` is an object ID that defines your place in the list.
         - `before` (str, optional): A cursor for use in pagination. `before` is an object ID that defines your place in the list.
     """
-    # Pool
-    postgres_pool = get_postgres_pool()
     # Check input assistant format (Before)
     if request.before and not request.before.startswith("asst"):
         raise InvalidIdFormatException(input = request.before,
@@ -85,17 +82,16 @@ async def list_assistants(request :PaginationQueryParams = Depends(),
                       summary = "[Assistant] Retrieve an assistant",
                       response_model = AssistantObject)
 async def retrieve_assistant(assistant_id: str,
+                             postgres_pool: asyncpg.Pool = Depends(get_postgres_pool),
                              api_key: str = Depends(verify_api_key)):
     """
     ## Retrieves an assistant.
-    
+
     Reference: [OpenAI Get Assistant API](https://platform.openai.com/docs/api-reference/assistants/getAssistant)
-    
+
     ### Args
         - `assistant_id` (str): The ID of the assistant to retrieve.
     """
-    # Pool
-    postgres_pool = get_postgres_pool()
     # Check assistant_id
     if not assistant_id.startswith("asst"):
         raise InvalidIdFormatException(input = assistant_id,
@@ -111,17 +107,16 @@ async def retrieve_assistant(assistant_id: str,
 @assistant_router.delete("/assistants/{assistant_id}",
                          summary = "[Assistant] Delete an assistant")
 async def delete_assistant(assistant_id: str,
+                           postgres_pool: asyncpg.Pool = Depends(get_postgres_pool),
                            api_key: str = Depends(verify_api_key)):
     """
     ## Delete an assistant.
-    
+
     Reference: [OpenAI Delete Assistant API](https://platform.openai.com/docs/api-reference/assistants/deleteAssistant)
-    
+
     ### Args
         - `assistant_id` (str): The ID of the assistant to delete.
     """
-    # Pool
-    postgres_pool = get_postgres_pool()
     # Check assistant_id
     if not assistant_id.startswith("asst"):
         raise InvalidIdFormatException(input = assistant_id,

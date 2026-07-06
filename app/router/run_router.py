@@ -46,6 +46,8 @@ def _normalize_usage(usage) -> Optional[dict]:
                  summary = "[Run] Create a run")
 async def create_run(thread_id: str = Path(..., description="The ID of the thread"),
                      request: CreateRunRequest = None,
+                     postgres_pool: asyncpg.Pool = Depends(get_postgres_pool),
+                     llm = Depends(get_model),
                      api_key: str = Depends(verify_api_key)):
     """
     ## Create a run for a thread.
@@ -56,10 +58,6 @@ async def create_run(thread_id: str = Path(..., description="The ID of the threa
         - `thread_id` (str): The ID of the thread to create a run for.
         - `request` (CreateRunRequest): The run creation request containing parameters like assistant_id, model, instructions, etc.
     """
-    # Postgres Service
-    postgres_pool = get_postgres_pool()
-    llm = get_model()
-
     # Check assistant_id
     if not request.assistant_id.startswith("asst"):
         raise InvalidIdFormatException(input = request.assistant_id,
@@ -105,6 +103,7 @@ async def create_run(thread_id: str = Path(..., description="The ID of the threa
                 response_model = RunListObject)
 async def list_runs(thread_id :str,
                     query_object :PaginationQueryParams = Depends(),
+                    postgres_pool: asyncpg.Pool = Depends(get_postgres_pool),
                     api_key: str = Depends(verify_api_key)):
     """
     ## List runs for a thread.
@@ -118,9 +117,6 @@ async def list_runs(thread_id :str,
         - `after` (str, optional): A cursor for use in pagination. `after` is an object ID that defines your place in the list.
         - `before` (str, optional): A cursor for use in pagination. `before` is an object ID that defines your place in the list.
     """
-
-    # Postgres Service
-    postgres_pool = get_postgres_pool()
     # Check string format of thread id
     if not thread_id.startswith("thread"):
         raise InvalidIdFormatException(input = thread_id, params = "thread_id")
@@ -156,6 +152,7 @@ async def list_runs(thread_id :str,
                 response_model = RunObject)
 async def retrieve_run(thread_id: str,
                        run_id: str,
+                       postgres_pool: asyncpg.Pool = Depends(get_postgres_pool),
                        api_key: str = Depends(verify_api_key)):
     """
     ## Retrieve a run by its ID.
@@ -166,9 +163,6 @@ async def retrieve_run(thread_id: str,
         - `thread_id` (str): The ID of the thread that the run belongs to.
         - `run_id` (str): The ID of the run to retrieve.
     """
-
-    # Postgres Service
-    postgres_pool = get_postgres_pool()
     # Check string format of thread id
     if not thread_id.startswith("thread"):
         raise InvalidIdFormatException(input = thread_id, params = "thread_id")

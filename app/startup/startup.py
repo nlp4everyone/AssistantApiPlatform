@@ -1,9 +1,11 @@
 # OpenAI-compatible client
+from fastapi import Request
 from openai import AsyncOpenAI
 from app.db.postgres import PostgresClient
 from app.db.minio import MinioService
 # Postgres
 from asyncpg import PostgresError
+import asyncpg
 # Config
 from app.core.config import *
 # Other component
@@ -20,7 +22,7 @@ os.environ["AWS_SECRET_ACCESS_KEY"] = MINIO_ROOT_PASSWORD
 os.environ["MLFLOW_S3_ENDPOINT_URL"] = MLFLOW_S3_ENDPOINT_URL
 os.environ["MLFLOW_DEFAULT_ARTIFACT_ROOT"] = MLFLOW_DEFAULT_ARTIFACT_ROOT
 
-async def init_model(base_url :str = None):
+async def init_model(base_url :str = None) -> AsyncOpenAI:
     """
     Initialize the LLM model connection.
 
@@ -34,7 +36,6 @@ async def init_model(base_url :str = None):
     Note:
         Tests the connection with a sample message and logs the result.
     """
-    global llm
     base_url = base_url or LLM_BASE_URL
     llm = AsyncOpenAI(base_url = base_url,
                       api_key = SERVING_API_KEY)
@@ -52,17 +53,13 @@ async def init_model(base_url :str = None):
         SystemLogger.error(f"[STARTUP] LLM serving connection test failed ({base_url}): {e}")
     return llm
 
-def init_postgres():
+def init_postgres() -> PostgresClient:
     """
     Initialize PostgreSQL database connection.
-    
+
     Returns:
         PostgresClient: Initialized PostgreSQL client instance
-        
-    Note:
-        Creates a global postgres_client instance for database operations.
     """
-    global postgres_client
     # Init connection
     postgres_client = PostgresClient(user = POSTGRES_USER,
                                        password = POSTGRES_PASSWORD,
@@ -71,26 +68,25 @@ def init_postgres():
                                        port = 5432)
     return postgres_client
 
-def init_minio():
+def init_minio() -> MinioService:
     """
     Initialize MinIO object storage service connection and create MLflow bucket.
-    
+
     This function sets up the MinIO service connection using environment configuration
     and ensures the required MLflow bucket exists. If the bucket doesn't exist,
     it creates one automatically.
-    
-    Global Variables:
-        minio_service: Global MinioService instance for object storage operations
-        
+
+    Returns:
+        MinioService: Initialized MinIO service instance
+
     Raises:
         ValueError: If MLFLOW_DEFAULT_ARTIFACT_ROOT has incorrect format
-        
+
     Note:
         - Extracts MinIO endpoint from MLFLOW_S3_ENDPOINT_URL
         - Parses bucket name from MLFLOW_DEFAULT_ARTIFACT_ROOT (s3://bucket-name/...)
         - Creates bucket if it doesn't exist for MLflow artifact storage
     """
-    global minio_service
     # Define url
     minio_endpoint_url = MLFLOW_S3_ENDPOINT_URL.replace("http://","")
     # Get bucket name
@@ -111,29 +107,15 @@ def init_minio():
         minio_service.client.make_bucket(bucket_name)
         SystemLogger.success(f"Create Minio bucker for MLflow ({bucket_name}) done!")
 
-def get_model():
-    """
-    Get the globally initialized LLM model instance.
+    return minio_service
 
-    Returns:
-        AsyncOpenAI: The initialized LLM client
-        
-    Raises:
-        NameError: If model has not been initialized
-    """
-    return llm
+def get_model(request: Request) -> AsyncOpenAI:
+    """FastAPI dependency returning the LLM client initialized at app startup."""
+    return request.app.state.llm
 
-def get_postgres_pool():
-    """
-    Get the PostgreSQL connection pool.
-    
-    Returns:
-        asyncpg.Pool: PostgreSQL connection pool
-        
-    Raises:
-        NameError: If PostgreSQL client has not been initialized
-    """
-    return postgres_client.pool
+def get_postgres_pool(request: Request) -> asyncpg.Pool:
+    """FastAPI dependency returning the PostgreSQL connection pool initialized at app startup."""
+    return request.app.state.postgres_client.pool
 
 def wait_for_serving(base_url :str = None,
                      wait_time :int = 5):
@@ -170,16 +152,16 @@ async def wait_for_postgres(pool,
                             delay: float = 0.5):
     """
     Wait for PostgreSQL database to become ready.
-    
+
     Args:
         pool: PostgreSQL connection pool
         retries (int): Number of retry attempts (default: 5)
         delay (float): Delay between retries in seconds (default: 0.5)
-        
+
     Raises:
         ConnectionRefusedError: If connection fails after all retries
         PostgresError: If database error occurs after all retries
-        
+
     Note:
         Tests connection with a simple query and logs each attempt.
     """
