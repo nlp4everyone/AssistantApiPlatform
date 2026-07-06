@@ -4,7 +4,6 @@ from fastapi import APIRouter, Depends, Body
 from app.schemas.threads import (ThreadObject,
                                  CreateThreadRequest,
                                  DeletedThreadResponse)
-from app.schemas.messages import MessageObject
 from app.schemas.runs.requests import CreateThreadRunRequest
 # Exception
 from app.exceptions.postgres import PostgresConnectionException
@@ -12,10 +11,11 @@ from app.exceptions import InvalidIdFormatException
 
 # Postgres Components
 from app.startup import get_postgres_pool, get_model
-from app.db.postgres import PostgresThreadStore, PostgresMessageStore
+from app.db.postgres import PostgresThreadStore
 # Utils
 from app.utils.id_generation import generate_assistant_object
-from app.utils.messaging import build_content_items
+# Thread service
+from app.services.threads import ThreadService
 # Run dispatch
 from app.services.runs import resolve_run_params, dispatch_run
 # Security
@@ -23,7 +23,7 @@ from app.security.auth import verify_api_key
 # Logger
 from loggers import SystemLogger
 # Other components
-import time, asyncpg, socket
+import asyncpg, socket
 
 # Define router
 thread_router = APIRouter()
@@ -43,60 +43,15 @@ async def create_thread(payload: CreateThreadRequest = Body(default = CreateThre
         - `metadata` (Optional[Dict[str, Any]]): Set of 16 key-value pairs that can be attached to the thread. Default: {}
         - `tool_resources` (Optional[ToolResource]): A set of resources that are made available to the assistant's tools in this thread. Default: {}
     """
-    # Generate new thread
-    thread_id = generate_assistant_object()
     # Postgres Service
     postgres_pool = get_postgres_pool()
 
-    # Time in second
-    created_at_seconds = int(time.time())
-
-    # Define data
-    data = ThreadObject(id = thread_id,
-                        created_at = created_at_seconds,
-                        metadata = payload.metadata or {},
-                        tool_resources = payload.tool_resources or {}).model_dump()
-
-    # Not message in input
-    output_messages = []
-
-    # When payload is not None
-    if payload.messages is not None:
-        for input_message in payload.messages:
-            # Define value
-            msg_id = generate_assistant_object(object = "message")
-            # Content (string or content blocks)
-            content = build_content_items(input_message.content)
-            # Append
-            output_messages.append(MessageObject(id = msg_id,
-                                                 created_at = created_at_seconds,
-                                                 thread_id = thread_id,
-                                                 role = input_message.role,
-                                                 content = content).model_dump())
-    # Update to data
-    data.update({"data": output_messages})
-
     try:
-        # Create new thread
-        await PostgresThreadStore.insert_thread(pool = postgres_pool,
-                                                thread_id = thread_id,
-                                                metadata = payload.metadata,
-                                                tool_resources = payload.tool_resources.model_dump())
-
-        # Add message if has message
-        if len(output_messages) > 0:
-            await PostgresMessageStore.insert_messages(pool = postgres_pool,
-                                                       data = data,
-                                                       thread_id = thread_id)
+        # Create thread and persist any seed messages
+        return await ThreadService.create_thread(postgres_pool = postgres_pool, payload = payload)
     except (asyncpg.PostgresError, socket.gaierror) as e:
-        SystemLogger.error(f"[THREAD_ROUTER] Failed to create thread {thread_id}: {e}")
+        SystemLogger.error(f"[THREAD_ROUTER] Failed to create thread: {e}")
         raise PostgresConnectionException()
-
-    # Return
-    return ThreadObject(id = thread_id,
-                        created_at = created_at_seconds,
-                        metadata = payload.metadata or {},
-                        tool_resources = payload.tool_resources or {})
 
 @thread_router.post("/threads/runs",
                     summary = "[Thread] Create thread and run")
@@ -175,14 +130,7 @@ async def retrieve_thread(thread_id: str,
                                        params = "thread_id")
     # Get information from thread
     try:
-        thread_info = await PostgresThreadStore.get_thread(pool = postgres_pool,
-                                                           thread_id = thread_id)
-        # Return
-        return ThreadObject(id = thread_info.get("id"),
-                            created_at = int(thread_info.get("created_at").timestamp()),
-                            metadata = thread_info.get("metadata", {}),
-                            tool_resources = thread_info.get("tool_resources", {}))
-
+        return await ThreadService.retrieve_thread(postgres_pool = postgres_pool, thread_id = thread_id)
     except (asyncpg.PostgresError, socket.gaierror) as e:
         # Postgres connection error
         SystemLogger.error(f"[THREAD_ROUTER] Failed to retrieve thread {thread_id}: {e}")
@@ -209,9 +157,7 @@ async def delete_thread(thread_id: str,
         raise InvalidIdFormatException(input = thread_id, params = "thread_id")
     try:
         # Try delete
-        await PostgresThreadStore.delete_thread(pool = postgres_pool, thread_id = thread_id)
-        # Return
-        return DeletedThreadResponse(id = thread_id)
+        return await ThreadService.delete_thread(postgres_pool = postgres_pool, thread_id = thread_id)
     except (asyncpg.PostgresError, socket.gaierror) as e:
         # Postgres connection error
         SystemLogger.error(f"[THREAD_ROUTER] Failed to delete thread {thread_id}: {e}")

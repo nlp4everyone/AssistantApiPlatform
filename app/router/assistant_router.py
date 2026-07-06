@@ -10,17 +10,15 @@ from app.schemas.common import PaginationQueryParams
 from app.exceptions import InvalidIdFormatException
 from app.exceptions.postgres import PostgresConnectionException
 # Postgres
-from app.db.postgres import PostgresAssistantStore
 from app.startup import get_postgres_pool
-# Utils
-from app.utils.id_generation import generate_assistant_object
-from app.utils.messaging.formatters import update_assistant_response
+# Assistant service
+from app.services.assistants import AssistantService
 # Security
 from app.security.auth import verify_api_key
 # Logger
 from loggers import SystemLogger
 # Other components
-import time, asyncpg, socket
+import asyncpg, socket
 
 assistant_router = APIRouter()
 
@@ -36,25 +34,9 @@ async def create_assistant(request: CreateAssistantRequest,
     """
     # Pool
     postgres_pool = get_postgres_pool()
-    # Define assistant id
-    assistant_id = generate_assistant_object("assistant")
 
     try:
-        # Insert new assistant to Postgres
-        await PostgresAssistantStore.create_assistant(pool = postgres_pool,
-                                              assistant_id = assistant_id,
-                                              request = request)
-
-        # Return response
-        return AssistantObject(id = assistant_id,
-                               name = request.name,
-                               created_at = int(time.time()),
-                               description = request.description,
-                               instructions = request.instructions,
-                               model = request.model,
-                               tools = request.tools,
-                               top_p = request.top_p,
-                               temperature = request.temperature)
+        return await AssistantService.create_assistant(postgres_pool = postgres_pool, request = request)
     except (asyncpg.PostgresError, socket.gaierror) as e:
         # Postgres connection error
         SystemLogger.error(f"[ASSISTANT_ROUTER] Failed to create assistant: {e}")
@@ -90,26 +72,11 @@ async def list_assistants(request :PaginationQueryParams = Depends(),
                                        prefix = "asst")
 
     try:
-        # Make the response
-        selected_assistant_objects = await PostgresAssistantStore.list_assistants(pool = postgres_pool,
-                                                                          order = request.order,
-                                                                          limit = request.limit,
-                                                                          after = request.after,
-                                                                          before = request.before)
-        # Total assistant counts
-        total_number_assistant = await PostgresAssistantStore.count_assistants(pool = postgres_pool)
-
-        # Empty object
-        assistant_objects = []
-        # Empty assistant, return
-        if len(selected_assistant_objects) == 0: return AssistantListObject(data = assistant_objects)
-
-        # Update value to correct format
-        assistant_objects = update_assistant_response([dict(assistant_object) for assistant_object in selected_assistant_objects])
-        return AssistantListObject(data = assistant_objects,
-                                   first_id = assistant_objects[0].id,
-                                   last_id = assistant_objects[-1].id,
-                                   has_more = True if len(selected_assistant_objects) < total_number_assistant else False)
+        return await AssistantService.list_assistants(postgres_pool = postgres_pool,
+                                                       order = request.order,
+                                                       limit = request.limit,
+                                                       after = request.after,
+                                                       before = request.before)
     except (asyncpg.PostgresError, socket.gaierror) as e:
         # Postgres connection error
         SystemLogger.error(f"[ASSISTANT_ROUTER] Failed to list assistants: {e}")
@@ -136,11 +103,7 @@ async def retrieve_assistant(assistant_id: str,
                                        params = "assistant_id",
                                        prefix = "asst")
     try:
-        res = await PostgresAssistantStore.get_assistant(pool = postgres_pool,
-                                                 assistant_id = assistant_id)
-        assistant_objects = update_assistant_response([res])
-        # Return information
-        return assistant_objects[0]
+        return await AssistantService.retrieve_assistant(postgres_pool = postgres_pool, assistant_id = assistant_id)
     except (asyncpg.PostgresError, socket.gaierror) as e:
         # Postgres connection error
         SystemLogger.error(f"[ASSISTANT_ROUTER] Failed to retrieve assistant {assistant_id}: {e}")
@@ -168,10 +131,7 @@ async def delete_assistant(assistant_id: str,
 
     try:
         # Delete assistant
-        await PostgresAssistantStore.delete_assistant(pool = postgres_pool,
-                                              assistant_id = assistant_id)
-        # Return
-        return DeletedAssistantResponse(id = assistant_id)
+        return await AssistantService.delete_assistant(postgres_pool = postgres_pool, assistant_id = assistant_id)
     except (asyncpg.PostgresError, socket.gaierror) as e:
         # Postgres connection error
         SystemLogger.error(f"[ASSISTANT_ROUTER] Failed to delete assistant {assistant_id}: {e}")

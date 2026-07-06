@@ -11,12 +11,9 @@ from app.exceptions.postgres import PostgresConnectionException
 from app.exceptions import InvalidIdFormatException
 # Get Postgres pool
 from app.startup import get_postgres_pool
-# Postgres Message Store
-from app.db.postgres import PostgresMessageStore
-# Utils
-from app.utils.id_generation import generate_assistant_object
-from app.utils.messaging import update_messages_response, build_content_items
-import time, asyncpg, socket
+# Message service
+from app.services.messages import MessageService
+import asyncpg, socket
 # Security
 from app.security.auth import verify_api_key
 # logger
@@ -51,36 +48,10 @@ async def create_message(thread_id: str,
     if not thread_id.startswith("thread"):
         raise InvalidIdFormatException(input = thread_id,
                                        params ="thread_id")
-    # Time in second
-    created_at_seconds = int(time.time())
-
-    # Process content based on type (string or content blocks)
-    content = build_content_items(message.content)
-
-    # Handle attachments
-    attachments = message.attachments if message.attachments else []
-    
-    # Handle metadata
-    metadata = message.metadata if message.metadata else {}
-
-    # Save to Postgres
-    message_object = MessageObject(id = generate_assistant_object(object = "message"),
-                                   created_at = created_at_seconds,
-                                   thread_id = thread_id,
-                                   role = message.role,
-                                   content = content,
-                                   attachments = attachments,
-                                   metadata = metadata).model_dump()
-
-    # Update to data
-    data = {"data": [message_object]}
-    # No message
     try:
-        await PostgresMessageStore.insert_messages(pool = postgres_pool,
+        return await MessageService.create_message(postgres_pool = postgres_pool,
                                                    thread_id = thread_id,
-                                                   data = data)
-        # Return
-        return message_object
+                                                   message = message)
     except (asyncpg.PostgresError, socket.gaierror) as e:
         # Postgres connection error
         SystemLogger.error(f"[MESSAGE_ROUTER] Failed to create message in thread {thread_id}: {e}")
@@ -113,21 +84,12 @@ async def list_messages(thread_id :str,
         raise InvalidIdFormatException(input = thread_id, params = "thread_id")
 
     try:
-        messages = await PostgresMessageStore.get_thread_messages(pool = postgres_pool,
-                                                                  thread_id = thread_id,
-                                                                  limit = query_object.limit,
-                                                                  after = query_object.after,
-                                                                  before = query_object.before,
-                                                                  run_id = run_id)
-        # No messages
-        if len(messages) == 0: return MessageListObject(data = [])
-        # Have messages
-        messages_object = update_messages_response(messages)
-        # Return messages
-        return MessageListObject(data = messages_object,
-                                 first_id = messages_object[0].id,
-                                 last_id = messages_object[-1].id)
-
+        return await MessageService.list_messages(postgres_pool = postgres_pool,
+                                                  thread_id = thread_id,
+                                                  limit = query_object.limit,
+                                                  after = query_object.after,
+                                                  before = query_object.before,
+                                                  run_id = run_id)
     except (asyncpg.PostgresError, socket.gaierror) as e:
         # Postgres connection error
         SystemLogger.error(f"[MESSAGE_ROUTER] Failed to list messages for thread {thread_id}: {e}")
@@ -159,10 +121,9 @@ async def retrieve_message(thread_id: str,
         raise InvalidIdFormatException(input = message_id, params = "message_id")
     try:
         # Get exact message
-        result = await PostgresMessageStore.get_message_by_id(pool=postgres_pool,
-                                                              message_id=message_id,
-                                                              thread_id=thread_id)
-        return MessageObject(**result)
+        return await MessageService.retrieve_message(postgres_pool = postgres_pool,
+                                                     thread_id = thread_id,
+                                                     message_id = message_id)
     except (asyncpg.PostgresError, socket.gaierror) as e:
         # Postgres connection error
         SystemLogger.error(f"[MESSAGE_ROUTER] Failed to retrieve message {message_id} from thread {thread_id}: {e}")
@@ -193,10 +154,9 @@ async def delete_message(thread_id: str,
         raise InvalidIdFormatException(input = message_id, params = "message_id")
 
     try:
-        await PostgresMessageStore.delete_message(pool = postgres_pool,
-                                                  thread_id = thread_id,
-                                                  message_id = message_id)
-        return DeletedMessageResponse(id = message_id)
+        return await MessageService.delete_message(postgres_pool = postgres_pool,
+                                                   thread_id = thread_id,
+                                                   message_id = message_id)
     except (asyncpg.PostgresError, socket.gaierror) as e:
         # Postgres connection error
         SystemLogger.error(f"[MESSAGE_ROUTER] Failed to delete message {message_id} from thread {thread_id}: {e}")
