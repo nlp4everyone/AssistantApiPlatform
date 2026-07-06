@@ -1,1 +1,1 @@
-from .run_dispatch import resolve_run_params, dispatch_run
+from .run_dispatch import RunDispatchService

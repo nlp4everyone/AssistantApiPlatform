@@ -17,7 +17,7 @@ from app.utils.id_generation import generate_assistant_object
 # Thread service
 from app.services.threads import ThreadService
 # Run dispatch
-from app.services.runs import resolve_run_params, dispatch_run
+from app.services.runs import RunDispatchService
 # Security
 from app.security.auth import verify_api_key
 # Logger
@@ -88,21 +88,21 @@ async def create_thread_and_run(request: CreateThreadRunRequest,
                                                 thread_id = thread_id)
 
         # Resolve instructions/temperature/top_p, falling back to the assistant's own config
-        instructions, temperature, top_p = await resolve_run_params(
+        instructions, temperature, top_p = await RunDispatchService.resolve_run_params(
             postgres_pool, request.assistant_id, request.instructions, request.temperature, request.top_p)
 
         # Enqueue background generation or return a streaming response
-        return await dispatch_run(postgres_pool = postgres_pool,
-                                  llm = llm,
-                                  request = request,
-                                  thread_id = thread_id,
-                                  run_id = run_id,
-                                  step_id = step_id,
-                                  message_id = message_id,
-                                  instructions = instructions,
-                                  temperature = temperature,
-                                  top_p = top_p,
-                                  endpoint_path = "/v1/threads/runs")
+        return await RunDispatchService.dispatch_run(postgres_pool = postgres_pool,
+                                                      llm = llm,
+                                                      request = request,
+                                                      thread_id = thread_id,
+                                                      run_id = run_id,
+                                                      step_id = step_id,
+                                                      message_id = message_id,
+                                                      instructions = instructions,
+                                                      temperature = temperature,
+                                                      top_p = top_p,
+                                                      endpoint_path = "/v1/threads/runs")
     except (asyncpg.PostgresError, socket.gaierror) as e:
         # Postgres connection error
         SystemLogger.error(f"[THREAD_ROUTER] Failed to create thread and run: {e}")

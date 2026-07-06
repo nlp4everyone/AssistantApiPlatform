@@ -3,8 +3,7 @@ from fastapi import APIRouter, Depends
 # Schema
 from app.schemas.assistants import (AssistantObject,
                                     CreateAssistantRequest,
-                                    AssistantListObject,
-                                    DeletedAssistantResponse)
+                                    AssistantListObject)
 from app.schemas.common import PaginationQueryParams
 # Exceptions
 from app.exceptions import InvalidIdFormatException
