@@ -6,7 +6,6 @@ from app.schemas.threads import (ThreadObject,
                                  DeletedThreadResponse)
 from app.schemas.runs.requests import CreateThreadRunRequest
 # Exception
-from app.exceptions.postgres import PostgresConnectionException
 from app.exceptions import InvalidIdFormatException
 
 # Postgres Components
@@ -20,10 +19,8 @@ from app.services.threads import ThreadService
 from app.services.runs import RunDispatchService
 # Security
 from app.security.auth import verify_api_key
-# Logger
-from loggers import SystemLogger
 # Other components
-import asyncpg, socket
+import asyncpg
 
 # Define router
 thread_router = APIRouter()
@@ -44,12 +41,8 @@ async def create_thread(payload: CreateThreadRequest = Body(default = CreateThre
         - `metadata` (Optional[Dict[str, Any]]): Set of 16 key-value pairs that can be attached to the thread. Default: {}
         - `tool_resources` (Optional[ToolResource]): A set of resources that are made available to the assistant's tools in this thread. Default: {}
     """
-    try:
-        # Create thread and persist any seed messages
-        return await ThreadService.create_thread(postgres_pool = postgres_pool, payload = payload)
-    except (asyncpg.PostgresError, socket.gaierror) as e:
-        SystemLogger.error(f"[THREAD_ROUTER] Failed to create thread: {e}")
-        raise PostgresConnectionException()
+    # Create thread and persist any seed messages
+    return await ThreadService.create_thread(postgres_pool = postgres_pool, payload = payload)
 
 @thread_router.post("/threads/runs",
                     summary = "[Thread] Create thread and run")
@@ -78,31 +71,26 @@ async def create_thread_and_run(request: CreateThreadRunRequest,
     thread_id = generate_assistant_object(object = "thread")
 
     # Normally here you'd forward request to OpenAI or process internally
-    try:
-        # Create new thread
-        await PostgresThreadStore.insert_thread(pool = postgres_pool,
-                                                thread_id = thread_id)
+    # Create new thread
+    await PostgresThreadStore.insert_thread(pool = postgres_pool,
+                                            thread_id = thread_id)
 
-        # Resolve instructions/temperature/top_p, falling back to the assistant's own config
-        instructions, temperature, top_p = await RunDispatchService.resolve_run_params(
-            postgres_pool, request.assistant_id, request.instructions, request.temperature, request.top_p)
+    # Resolve instructions/temperature/top_p, falling back to the assistant's own config
+    instructions, temperature, top_p = await RunDispatchService.resolve_run_params(
+        postgres_pool, request.assistant_id, request.instructions, request.temperature, request.top_p)
 
-        # Enqueue background generation or return a streaming response
-        return await RunDispatchService.dispatch_run(postgres_pool = postgres_pool,
-                                                      llm = llm,
-                                                      request = request,
-                                                      thread_id = thread_id,
-                                                      run_id = run_id,
-                                                      step_id = step_id,
-                                                      message_id = message_id,
-                                                      instructions = instructions,
-                                                      temperature = temperature,
-                                                      top_p = top_p,
-                                                      endpoint_path = "/v1/threads/runs")
-    except (asyncpg.PostgresError, socket.gaierror) as e:
-        # Postgres connection error
-        SystemLogger.error(f"[THREAD_ROUTER] Failed to create thread and run: {e}")
-        raise PostgresConnectionException()
+    # Enqueue background generation or return a streaming response
+    return await RunDispatchService.dispatch_run(postgres_pool = postgres_pool,
+                                                  llm = llm,
+                                                  request = request,
+                                                  thread_id = thread_id,
+                                                  run_id = run_id,
+                                                  step_id = step_id,
+                                                  message_id = message_id,
+                                                  instructions = instructions,
+                                                  temperature = temperature,
+                                                  top_p = top_p,
+                                                  endpoint_path = "/v1/threads/runs")
 
 @thread_router.get("/threads/{thread_id}",
                    summary = "[Thread] Retrieve a thread",
@@ -123,12 +111,7 @@ async def retrieve_thread(thread_id: str,
         raise InvalidIdFormatException(input = thread_id,
                                        params = "thread_id")
     # Get information from thread
-    try:
-        return await ThreadService.retrieve_thread(postgres_pool = postgres_pool, thread_id = thread_id)
-    except (asyncpg.PostgresError, socket.gaierror) as e:
-        # Postgres connection error
-        SystemLogger.error(f"[THREAD_ROUTER] Failed to retrieve thread {thread_id}: {e}")
-        raise PostgresConnectionException()
+    return await ThreadService.retrieve_thread(postgres_pool = postgres_pool, thread_id = thread_id)
 
 @thread_router.delete("/threads/{thread_id}",
                       summary = "[Thread] Delete a thread",
@@ -147,10 +130,5 @@ async def delete_thread(thread_id: str,
     # Check string format of thread id
     if not thread_id.startswith("thread"):
         raise InvalidIdFormatException(input = thread_id, params = "thread_id")
-    try:
-        # Try delete
-        return await ThreadService.delete_thread(postgres_pool = postgres_pool, thread_id = thread_id)
-    except (asyncpg.PostgresError, socket.gaierror) as e:
-        # Postgres connection error
-        SystemLogger.error(f"[THREAD_ROUTER] Failed to delete thread {thread_id}: {e}")
-        raise PostgresConnectionException()
+    # Try delete
+    return await ThreadService.delete_thread(postgres_pool = postgres_pool, thread_id = thread_id)

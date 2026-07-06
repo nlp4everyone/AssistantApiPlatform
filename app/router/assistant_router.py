@@ -7,17 +7,14 @@ from app.schemas.assistants import (AssistantObject,
 from app.schemas.common import PaginationQueryParams
 # Exceptions
 from app.exceptions import InvalidIdFormatException
-from app.exceptions.postgres import PostgresConnectionException
 # Postgres
 from app.startup import get_postgres_pool
 # Assistant service
 from app.services.assistants import AssistantService
 # Security
 from app.security.auth import verify_api_key
-# Logger
-from loggers import SystemLogger
 # Other components
-import asyncpg, socket
+import asyncpg
 
 assistant_router = APIRouter()
 
@@ -32,12 +29,7 @@ async def create_assistant(request: CreateAssistantRequest,
 
     Reference: [OpenAI Create Assistant API](https://platform.openai.com/docs/api-reference/assistants/createAssistant)
     """
-    try:
-        return await AssistantService.create_assistant(postgres_pool = postgres_pool, request = request)
-    except (asyncpg.PostgresError, socket.gaierror) as e:
-        # Postgres connection error
-        SystemLogger.error(f"[ASSISTANT_ROUTER] Failed to create assistant: {e}")
-        raise PostgresConnectionException()
+    return await AssistantService.create_assistant(postgres_pool = postgres_pool, request = request)
 
 @assistant_router.get("/assistants",
                       summary = "[Assistant] List all assistants",
@@ -67,16 +59,11 @@ async def list_assistants(request :PaginationQueryParams = Depends(),
                                        params = "after",
                                        prefix = "asst")
 
-    try:
-        return await AssistantService.list_assistants(postgres_pool = postgres_pool,
-                                                       order = request.order,
-                                                       limit = request.limit,
-                                                       after = request.after,
-                                                       before = request.before)
-    except (asyncpg.PostgresError, socket.gaierror) as e:
-        # Postgres connection error
-        SystemLogger.error(f"[ASSISTANT_ROUTER] Failed to list assistants: {e}")
-        raise PostgresConnectionException()
+    return await AssistantService.list_assistants(postgres_pool = postgres_pool,
+                                                   order = request.order,
+                                                   limit = request.limit,
+                                                   after = request.after,
+                                                   before = request.before)
 
 @assistant_router.get("/assistants/{assistant_id}",
                       summary = "[Assistant] Retrieve an assistant",
@@ -97,12 +84,7 @@ async def retrieve_assistant(assistant_id: str,
         raise InvalidIdFormatException(input = assistant_id,
                                        params = "assistant_id",
                                        prefix = "asst")
-    try:
-        return await AssistantService.retrieve_assistant(postgres_pool = postgres_pool, assistant_id = assistant_id)
-    except (asyncpg.PostgresError, socket.gaierror) as e:
-        # Postgres connection error
-        SystemLogger.error(f"[ASSISTANT_ROUTER] Failed to retrieve assistant {assistant_id}: {e}")
-        raise PostgresConnectionException()
+    return await AssistantService.retrieve_assistant(postgres_pool = postgres_pool, assistant_id = assistant_id)
 
 @assistant_router.delete("/assistants/{assistant_id}",
                          summary = "[Assistant] Delete an assistant")
@@ -123,10 +105,5 @@ async def delete_assistant(assistant_id: str,
                                        params = "assistant_id",
                                        prefix = "asst")
 
-    try:
-        # Delete assistant
-        return await AssistantService.delete_assistant(postgres_pool = postgres_pool, assistant_id = assistant_id)
-    except (asyncpg.PostgresError, socket.gaierror) as e:
-        # Postgres connection error
-        SystemLogger.error(f"[ASSISTANT_ROUTER] Failed to delete assistant {assistant_id}: {e}")
-        raise PostgresConnectionException()
+    # Delete assistant
+    return await AssistantService.delete_assistant(postgres_pool = postgres_pool, assistant_id = assistant_id)

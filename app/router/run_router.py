@@ -6,7 +6,6 @@ from app.schemas.runs import RunObject, RunListObject
 from app.schemas.runs.requests import CreateRunRequest
 # Exceptions
 from app.exceptions import InvalidIdFormatException
-from app.exceptions.postgres import PostgresConnectionException
 # DB
 from app.db.postgres import PostgresThreadStore, PostgresRunStore
 from app.startup import get_postgres_pool, get_model
@@ -17,11 +16,9 @@ from app.services.runs import RunDispatchService
 # Typing
 from typing import Optional
 # Other
-import asyncpg, socket, json
+import asyncpg, json
 # Security
 from app.security.auth import verify_api_key
-# Logger
-from loggers import SystemLogger
 
 # Router
 run_router = APIRouter()
@@ -72,31 +69,26 @@ async def create_run(thread_id: str = Path(..., description="The ID of the threa
     step_id = generate_assistant_object(object = "step")
     message_id = generate_assistant_object(object = "message")
 
-    try:
-        # Check thread
-        await PostgresThreadStore.is_thread_exists(pool = postgres_pool,
-                                                    thread_id = thread_id)
+    # Check thread
+    await PostgresThreadStore.is_thread_exists(pool = postgres_pool,
+                                                thread_id = thread_id)
 
-        # Resolve instructions/temperature/top_p, falling back to the assistant's own config
-        instructions, temperature, top_p = await RunDispatchService.resolve_run_params(
-            postgres_pool, request.assistant_id, request.instructions, request.temperature, request.top_p)
+    # Resolve instructions/temperature/top_p, falling back to the assistant's own config
+    instructions, temperature, top_p = await RunDispatchService.resolve_run_params(
+        postgres_pool, request.assistant_id, request.instructions, request.temperature, request.top_p)
 
-        # Enqueue background generation or return a streaming response
-        return await RunDispatchService.dispatch_run(postgres_pool = postgres_pool,
-                                                      llm = llm,
-                                                      request = request,
-                                                      thread_id = thread_id,
-                                                      run_id = run_id,
-                                                      step_id = step_id,
-                                                      message_id = message_id,
-                                                      instructions = instructions,
-                                                      temperature = temperature,
-                                                      top_p = top_p,
-                                                      endpoint_path = "/v1/threads/{thread_id}/runs")
-    except (asyncpg.PostgresError, socket.gaierror) as e:
-        # Postgres connection error
-        SystemLogger.error(f"[RUN_ROUTER] Failed to create run for thread {thread_id}: {e}")
-        raise PostgresConnectionException()
+    # Enqueue background generation or return a streaming response
+    return await RunDispatchService.dispatch_run(postgres_pool = postgres_pool,
+                                                  llm = llm,
+                                                  request = request,
+                                                  thread_id = thread_id,
+                                                  run_id = run_id,
+                                                  step_id = step_id,
+                                                  message_id = message_id,
+                                                  instructions = instructions,
+                                                  temperature = temperature,
+                                                  top_p = top_p,
+                                                  endpoint_path = "/v1/threads/{thread_id}/runs")
 
 @run_router.get("/{thread_id}/runs",
                 summary = "[Run] List thread runs",
@@ -121,31 +113,25 @@ async def list_runs(thread_id :str,
     if not thread_id.startswith("thread"):
         raise InvalidIdFormatException(input = thread_id, params = "thread_id")
 
-    try:
-        # Get runs objects
-        run_objects = await PostgresRunStore.get_runs(pool = postgres_pool,
-                                                      thread_id = thread_id,
-                                                      limit = query_object.limit,
-                                                      after = query_object.after,
-                                                      before = query_object.before,
-                                                      order = query_object.order)
-        # No objects
-        if len(run_objects) == 0: return RunListObject(data = [])
-        # Update usage first
-        for obj in run_objects:
-            obj["usage"] = _normalize_usage(obj.get("usage"))
+    # Get runs objects
+    run_objects = await PostgresRunStore.get_runs(pool = postgres_pool,
+                                                  thread_id = thread_id,
+                                                  limit = query_object.limit,
+                                                  after = query_object.after,
+                                                  before = query_object.before,
+                                                  order = query_object.order)
+    # No objects
+    if len(run_objects) == 0: return RunListObject(data = [])
+    # Update usage first
+    for obj in run_objects:
+        obj["usage"] = _normalize_usage(obj.get("usage"))
 
-        # Convert to BaseModel objects
-        run_objects = [RunObject.model_validate(obj) for obj in run_objects]
-        # Return list of run object
-        return RunListObject(data = run_objects,
-                             first_id = run_objects[0].id,
-                             last_id = run_objects[-1].id)
-
-    except (asyncpg.PostgresError, socket.gaierror) as e:
-        # Postgres connection error
-        SystemLogger.error(f"[RUN_ROUTER] Failed to list runs for thread {thread_id}: {e}")
-        raise PostgresConnectionException()
+    # Convert to BaseModel objects
+    run_objects = [RunObject.model_validate(obj) for obj in run_objects]
+    # Return list of run object
+    return RunListObject(data = run_objects,
+                         first_id = run_objects[0].id,
+                         last_id = run_objects[-1].id)
 
 @run_router.get("/{thread_id}/runs/{run_id}",
                 summary = "[Run] Retrieve a run",
@@ -170,19 +156,13 @@ async def retrieve_run(thread_id: str,
     if not run_id.startswith("run"):
         raise InvalidIdFormatException(input = run_id, params = "run_id")
 
-    try:
-        # Get response
-        run_object = await PostgresRunStore.get_run(pool = postgres_pool,
-                                                    thread_id = thread_id,
-                                                    run_id = run_id)
+    # Get response
+    run_object = await PostgresRunStore.get_run(pool = postgres_pool,
+                                                thread_id = thread_id,
+                                                run_id = run_id)
 
-        # Update usage first
-        run_object["usage"] = _normalize_usage(run_object.get("usage"))
+    # Update usage first
+    run_object["usage"] = _normalize_usage(run_object.get("usage"))
 
-        # Return run object
-        return RunObject.model_validate(run_object)
-
-    except (asyncpg.PostgresError, socket.gaierror) as e:
-        # Postgres connection error
-        SystemLogger.error(f"[RUN_ROUTER] Failed to retrieve run {run_id} from thread {thread_id}: {e}")
-        raise PostgresConnectionException()
+    # Return run object
+    return RunObject.model_validate(run_object)

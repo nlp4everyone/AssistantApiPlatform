@@ -8,12 +8,12 @@ from .router import (thread_router,
                      run_router)
 # Exception
 from .exceptions import AppException
-from .exceptions.handlers import common_exception_handler
+from .exceptions.handlers import common_exception_handler, postgres_connection_exception_handler
 # Config
 from .core.config import *
 
 # Components
-import time, logging
+import time, logging, asyncpg, socket
 # Logger
 from loggers import SystemLogger
 logging.getLogger("uvicorn.error").propagate = False
@@ -50,6 +50,8 @@ app.include_router(run_router,
                    tags = [tags_metadata[1].get("name")])
 # Add exception
 app.add_exception_handler(AppException, common_exception_handler)
+app.add_exception_handler(asyncpg.PostgresError, postgres_connection_exception_handler)
+app.add_exception_handler(socket.gaierror, postgres_connection_exception_handler)
 
 @app.on_event("startup")
 async def startup_event():
