@@ -19,13 +19,6 @@ class PostgresAssistantStore:
         return table_name
     
     @staticmethod
-    async def _check_assistant_exists(pool: asyncpg.Pool, assistant_id: str, table_name: str) -> bool:
-        """Check if assistant exists in the specified table."""
-        validated_table = PostgresAssistantStore._validate_table_name(table_name)
-        async with pool.acquire() as conn:
-            return await conn.fetchval(f"SELECT 1 FROM {validated_table} WHERE assistant_id = $1", assistant_id) is not None
-    
-    @staticmethod
     def _validate_pagination_params(order: str, limit: int) -> Tuple[str, int]:
         """Validate pagination parameters."""
         order = order.lower()
@@ -109,13 +102,12 @@ class PostgresAssistantStore:
         Raises:
             AssistantNotFoundException: If assistant doesn't exist
         """
-        if not await PostgresAssistantStore._check_assistant_exists(pool, assistant_id, table_name):
-            raise AssistantNotFoundException(assistant_id = assistant_id)
-        
         validated_table = PostgresAssistantStore._validate_table_name(table_name)
         async with pool.acquire() as conn:
             row = await conn.fetchrow(f"SELECT * FROM {validated_table} WHERE assistant_id = $1", assistant_id)
-            return dict(row)
+        if row is None:
+            raise AssistantNotFoundException(assistant_id = assistant_id)
+        return dict(row)
 
     @staticmethod
     async def count_assistants(pool :asyncpg.Pool,
@@ -192,14 +184,13 @@ class PostgresAssistantStore:
         Raises:
             AssistantNotFoundException: If assistant doesn't exist
         """
-        if not await PostgresAssistantStore._check_assistant_exists(pool, assistant_id, table_name):
-            raise AssistantNotFoundException(assistant_id = assistant_id)
-        
         validated_table = PostgresAssistantStore._validate_table_name(table_name)
         query = f"DELETE FROM {validated_table} WHERE assistant_id = $1 RETURNING *"
         async with pool.acquire() as conn:
             row = await conn.fetchrow(query, assistant_id)
-            return row
+        if row is None:
+            raise AssistantNotFoundException(assistant_id = assistant_id)
+        return row
 
 def _build_list_assistants_query(order: str,
                                  limit: int,

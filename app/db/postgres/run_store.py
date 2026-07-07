@@ -7,7 +7,7 @@ from app.schemas.runs import RunStatus
 from app.exceptions.threads import ThreadNotFoundException
 from app.exceptions.runs import RunNotFoundException
 # Other components
-from app.db.postgres.thread_store import _check_thread_exists
+from app.db.postgres.existence import check_row_exists
 import asyncpg, json
 
 # Common SELECT field group for run queries
@@ -224,7 +224,7 @@ class PostgresRunStore:
         # Execute query with connection from pool
         async with pool.acquire() as conn:
             # Verify thread exists before fetching runs
-            if not await _check_thread_exists(conn, thread_id):
+            if not await check_row_exists(conn, "threads", "id", thread_id):
                 raise ThreadNotFoundException(thread_id=thread_id)
             
             # Fetch and return runs
@@ -271,7 +271,7 @@ class PostgresRunStore:
         # Execute query using connection from pool
         async with pool.acquire() as conn:
             # Verify thread exists before fetching run
-            if not await _check_thread_exists(conn, thread_id):
+            if not await check_row_exists(conn, "threads", "id", thread_id):
                 raise ThreadNotFoundException(thread_id=thread_id)
             
             # Fetch the specific run

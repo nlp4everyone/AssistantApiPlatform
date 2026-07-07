@@ -4,7 +4,7 @@ from typing import Dict, Any, Optional, List, Literal
 from app.exceptions.messages import MessageNotFoundException
 from app.exceptions.threads import ThreadNotFoundException
 # Other components
-from app.db.postgres.thread_store import _check_thread_exists
+from app.db.postgres.existence import check_row_exists
 import asyncpg, json
 
 class PostgresMessageStore:
@@ -51,7 +51,7 @@ class PostgresMessageStore:
             # Execute single message insertion
             async with pool.acquire() as conn:
                 # Verify thread exists before inserting
-                if not await _check_thread_exists(conn, thread_id):
+                if not await check_row_exists(conn, "threads", "id", thread_id):
                     raise ThreadNotFoundException(thread_id = thread_id)
 
                 # Insert the message and return its ID
@@ -84,7 +84,7 @@ class PostgresMessageStore:
             # Execute batch insertion
             async with pool.acquire() as conn:
                 # Verify thread exists before inserting
-                if not await _check_thread_exists(conn, thread_id):
+                if not await check_row_exists(conn, "threads", "id", thread_id):
                     raise ThreadNotFoundException(thread_id = thread_id)
 
                 # Insert all messages in a single transaction
@@ -160,7 +160,7 @@ class PostgresMessageStore:
         params.append(limit)
         async with pool.acquire() as conn:
             # Verify thread exists before fetching messages
-            if not await _check_thread_exists(conn, thread_id):
+            if not await check_row_exists(conn, "threads", "id", thread_id):
                 raise ThreadNotFoundException(thread_id = thread_id)
             # Execute query and fetch all matching rows
             rows = await conn.fetch(query, *params)
@@ -190,7 +190,7 @@ class PostgresMessageStore:
         query = "SELECT * FROM messages WHERE thread_id=$1 AND id=$2"
         async with pool.acquire() as conn:
             # Verify thread exists before fetching message
-            if not await _check_thread_exists(conn, thread_id):
+            if not await check_row_exists(conn, "threads", "id", thread_id):
                 raise ThreadNotFoundException(thread_id = thread_id)
             # Fetch the specific message
             row = await conn.fetchrow(query, thread_id, message_id)
@@ -229,7 +229,7 @@ class PostgresMessageStore:
         query = "DELETE FROM messages WHERE thread_id=$1 AND id=$2"
         async with pool.acquire() as conn:
             # Verify thread exists before deleting message
-            if not await _check_thread_exists(conn, thread_id):
+            if not await check_row_exists(conn, "threads", "id", thread_id):
                 raise ThreadNotFoundException(thread_id = thread_id)
             # Execute deletion and check result
             result = await conn.execute(query, thread_id, message_id)
