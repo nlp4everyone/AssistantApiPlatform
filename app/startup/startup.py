@@ -65,7 +65,7 @@ def init_postgres() -> PostgresClient:
                                        password = POSTGRES_PASSWORD,
                                        database = POSTGRES_DB,
                                        host = POSTGRES_HOST,
-                                       port = 5432)
+                                       port = POSTGRES_PORT)
     return postgres_client
 
 def init_minio() -> MinioService:
