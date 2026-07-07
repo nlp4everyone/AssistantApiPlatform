@@ -52,7 +52,7 @@ class PostgresMessageStore:
             async with pool.acquire() as conn:
                 # Verify thread exists before inserting
                 if not await check_row_exists(conn, "threads", "id", thread_id):
-                    raise ThreadNotFoundException(thread_id = thread_id)
+                    raise ThreadNotFoundException(id = thread_id)
 
                 # Insert the message and return its ID
                 inserted_id = await conn.fetchval(
@@ -85,7 +85,7 @@ class PostgresMessageStore:
             async with pool.acquire() as conn:
                 # Verify thread exists before inserting
                 if not await check_row_exists(conn, "threads", "id", thread_id):
-                    raise ThreadNotFoundException(thread_id = thread_id)
+                    raise ThreadNotFoundException(id = thread_id)
 
                 # Insert all messages in a single transaction
                 await conn.executemany(query, rows)
@@ -161,7 +161,7 @@ class PostgresMessageStore:
         async with pool.acquire() as conn:
             # Verify thread exists before fetching messages
             if not await check_row_exists(conn, "threads", "id", thread_id):
-                raise ThreadNotFoundException(thread_id = thread_id)
+                raise ThreadNotFoundException(id = thread_id)
             # Execute query and fetch all matching rows
             rows = await conn.fetch(query, *params)
 
@@ -191,11 +191,11 @@ class PostgresMessageStore:
         async with pool.acquire() as conn:
             # Verify thread exists before fetching message
             if not await check_row_exists(conn, "threads", "id", thread_id):
-                raise ThreadNotFoundException(thread_id = thread_id)
+                raise ThreadNotFoundException(id = thread_id)
             # Fetch the specific message
             row = await conn.fetchrow(query, thread_id, message_id)
             # Raise error if message not found
-            if row is None: raise MessageNotFoundException(message_id = message_id)
+            if row is None: raise MessageNotFoundException(id = message_id)
 
         # Convert database row to dictionary
         row = dict(row)
@@ -230,8 +230,8 @@ class PostgresMessageStore:
         async with pool.acquire() as conn:
             # Verify thread exists before deleting message
             if not await check_row_exists(conn, "threads", "id", thread_id):
-                raise ThreadNotFoundException(thread_id = thread_id)
+                raise ThreadNotFoundException(id = thread_id)
             # Execute deletion and check result
             result = await conn.execute(query, thread_id, message_id)
             # PostgreSQL returns 'DELETE 0' if no rows were affected
-            if result.endswith("0"): raise MessageNotFoundException(message_id = message_id)
+            if result.endswith("0"): raise MessageNotFoundException(id = message_id)

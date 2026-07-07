@@ -225,7 +225,7 @@ class PostgresRunStore:
         async with pool.acquire() as conn:
             # Verify thread exists before fetching runs
             if not await check_row_exists(conn, "threads", "id", thread_id):
-                raise ThreadNotFoundException(thread_id=thread_id)
+                raise ThreadNotFoundException(id=thread_id)
             
             # Fetch and return runs
             rows = await conn.fetch(query, *params)
@@ -272,14 +272,14 @@ class PostgresRunStore:
         async with pool.acquire() as conn:
             # Verify thread exists before fetching run
             if not await check_row_exists(conn, "threads", "id", thread_id):
-                raise ThreadNotFoundException(thread_id=thread_id)
+                raise ThreadNotFoundException(id=thread_id)
             
             # Fetch the specific run
             row = await conn.fetchrow(query, run_id, thread_id)
 
         # Check if run was found
         if not row:
-            raise RunNotFoundException(run_id=run_id)
+            raise RunNotFoundException(id=run_id)
 
         # Convert asyncpg Record object to dictionary and return
         return dict(row)

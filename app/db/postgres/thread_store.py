@@ -49,7 +49,7 @@ class PostgresThreadStore:
         async with pool.acquire() as conn:
             row = await conn.fetchrow("SELECT id, metadata, tool_resources, created_at FROM threads WHERE id = $1", thread_id)
         if row is None:
-            raise ThreadNotFoundException(thread_id = thread_id)
+            raise ThreadNotFoundException(id = thread_id)
         result = dict(row)
         # Parse JSON strings back to dictionaries
         result["metadata"] = json.loads(result.get("metadata", "{}"))
@@ -72,7 +72,7 @@ class PostgresThreadStore:
         async with pool.acquire() as conn:
             # Ensure thread exists
             if not await check_row_exists(conn, "threads", "id", thread_id):
-                raise ThreadNotFoundException(thread_id=thread_id)
+                raise ThreadNotFoundException(id=thread_id)
 
     @staticmethod
     async def delete_thread(pool: asyncpg.Pool,
@@ -93,5 +93,5 @@ class PostgresThreadStore:
         async with pool.acquire() as conn:
             result = await conn.execute("DELETE FROM threads WHERE id=$1", thread_id)
         if result.endswith("0"):
-            raise ThreadNotFoundException(thread_id=thread_id)
+            raise ThreadNotFoundException(id=thread_id)
         return True

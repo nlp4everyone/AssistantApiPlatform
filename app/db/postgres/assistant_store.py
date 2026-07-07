@@ -106,7 +106,7 @@ class PostgresAssistantStore:
         async with pool.acquire() as conn:
             row = await conn.fetchrow(f"SELECT * FROM {validated_table} WHERE assistant_id = $1", assistant_id)
         if row is None:
-            raise AssistantNotFoundException(assistant_id = assistant_id)
+            raise AssistantNotFoundException(id = assistant_id)
         return dict(row)
 
     @staticmethod
@@ -189,7 +189,7 @@ class PostgresAssistantStore:
         async with pool.acquire() as conn:
             row = await conn.fetchrow(query, assistant_id)
         if row is None:
-            raise AssistantNotFoundException(assistant_id = assistant_id)
+            raise AssistantNotFoundException(id = assistant_id)
         return row
 
 def _build_list_assistants_query(order: str,
