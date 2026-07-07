@@ -1,5 +1,5 @@
 import json
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from app.schemas.messages import MessageObject
 from app.schemas.assistants.base import AssistantObject
 
@@ -85,5 +85,20 @@ def update_messages_response(messages: List[Dict[str, Any]]) -> List[MessageObje
         
         # Parse
         messages_object.append(MessageObject.model_validate(message))
-    
+
     return messages_object
+
+def normalize_run_usage(usage) -> Optional[dict]:
+    """Coerce a raw `usage` DB value (JSON string, dict, or None) into a valid usage dict or None."""
+    if isinstance(usage, str):
+        try:
+            usage = json.loads(usage)
+        except (json.JSONDecodeError, TypeError):
+            return None
+    if not isinstance(usage, dict):
+        return None
+    if (usage.get("prompt_tokens") is not None and
+        usage.get("completion_tokens") is not None and
+        usage.get("total_tokens") is not None):
+        return usage
+    return None

@@ -7,37 +7,19 @@ from app.schemas.runs.requests import CreateRunRequest
 # Exceptions
 from app.exceptions import InvalidIdFormatException
 # DB
-from app.db.postgres import PostgresThreadStore, PostgresRunStore
+from app.db.postgres import PostgresThreadStore
 from app.startup import get_postgres_pool, get_model
 # Utils
 from app.utils.id_generation import generate_assistant_object
-# Run dispatch
-from app.services.runs import RunDispatchService
-# Typing
-from typing import Optional
+# Run services
+from app.services.runs import RunDispatchService, RunService
 # Other
-import asyncpg, json
+import asyncpg
 # Security
 from app.security.auth import verify_api_key
 
 # Router
 run_router = APIRouter()
-
-
-def _normalize_usage(usage) -> Optional[dict]:
-    """Coerce a raw `usage` DB value (JSON string, dict, or None) into a valid usage dict or None."""
-    if isinstance(usage, str):
-        try:
-            usage = json.loads(usage)
-        except (json.JSONDecodeError, TypeError):
-            return None
-    if not isinstance(usage, dict):
-        return None
-    if (usage.get("prompt_tokens") is not None and
-        usage.get("completion_tokens") is not None and
-        usage.get("total_tokens") is not None):
-        return usage
-    return None
 
 @run_router.post("/{thread_id}/runs",
                  summary = "[Run] Create a run")
@@ -113,25 +95,12 @@ async def list_runs(thread_id :str,
     if not thread_id.startswith("thread"):
         raise InvalidIdFormatException(input = thread_id, params = "thread_id")
 
-    # Get runs objects
-    run_objects = await PostgresRunStore.get_runs(pool = postgres_pool,
-                                                  thread_id = thread_id,
-                                                  limit = query_object.limit,
-                                                  after = query_object.after,
-                                                  before = query_object.before,
-                                                  order = query_object.order)
-    # No objects
-    if len(run_objects) == 0: return RunListObject(data = [])
-    # Update usage first
-    for obj in run_objects:
-        obj["usage"] = _normalize_usage(obj.get("usage"))
-
-    # Convert to BaseModel objects
-    run_objects = [RunObject.model_validate(obj) for obj in run_objects]
-    # Return list of run object
-    return RunListObject(data = run_objects,
-                         first_id = run_objects[0].id,
-                         last_id = run_objects[-1].id)
+    return await RunService.list_runs(postgres_pool = postgres_pool,
+                                      thread_id = thread_id,
+                                      limit = query_object.limit,
+                                      after = query_object.after,
+                                      before = query_object.before,
+                                      order = query_object.order)
 
 @run_router.get("/{thread_id}/runs/{run_id}",
                 summary = "[Run] Retrieve a run",
@@ -156,13 +125,6 @@ async def retrieve_run(thread_id: str,
     if not run_id.startswith("run"):
         raise InvalidIdFormatException(input = run_id, params = "run_id")
 
-    # Get response
-    run_object = await PostgresRunStore.get_run(pool = postgres_pool,
-                                                thread_id = thread_id,
-                                                run_id = run_id)
-
-    # Update usage first
-    run_object["usage"] = _normalize_usage(run_object.get("usage"))
-
-    # Return run object
-    return RunObject.model_validate(run_object)
+    return await RunService.retrieve_run(postgres_pool = postgres_pool,
+                                         thread_id = thread_id,
+                                         run_id = run_id)
