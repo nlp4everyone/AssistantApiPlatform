@@ -1,5 +1,5 @@
 # Typing
-from typing import Optional
+from typing import Optional, Literal
 # Schema
 from app.schemas.common import ChatMessage
 from app.schemas.messages import MessageObject, MessageListObject, DeletedMessageResponse
@@ -39,6 +39,7 @@ class MessageService:
                             limit: int,
                             after: Optional[str],
                             before: Optional[str],
+                            order: Literal["asc", "desc"] = "desc",
                             run_id: Optional[str] = None) -> MessageListObject:
         """List messages in a thread with keyset pagination, optionally filtered by run."""
         messages = await PostgresMessageStore.get_thread_messages(pool = postgres_pool,
@@ -46,6 +47,7 @@ class MessageService:
                                                                   limit = limit,
                                                                   after = after,
                                                                   before = before,
+                                                                  order = order,
                                                                   run_id = run_id)
         if len(messages) == 0:
             return MessageListObject(data = [])

@@ -10,7 +10,6 @@ from app.exceptions import InvalidIdFormatException
 
 # Postgres Components
 from app.startup import get_postgres_pool, get_model
-from app.db.postgres import PostgresThreadStore
 # Utils
 from app.utils.id_generation import generate_assistant_object
 # Thread service
@@ -68,12 +67,11 @@ async def create_thread_and_run(request: CreateThreadRunRequest,
     run_id = generate_assistant_object(object="run")
     step_id = generate_assistant_object(object="step")
     message_id = generate_assistant_object(object="message")
-    thread_id = generate_assistant_object(object = "thread")
 
-    # Normally here you'd forward request to OpenAI or process internally
-    # Create new thread
-    await PostgresThreadStore.insert_thread(pool = postgres_pool,
-                                            thread_id = thread_id)
+    # Create the thread, persisting any seed metadata/tool_resources/messages from the request
+    thread = await ThreadService.create_thread(postgres_pool = postgres_pool,
+                                               payload = request.thread or CreateThreadRequest())
+    thread_id = thread.id
 
     # Resolve instructions/temperature/top_p, falling back to the assistant's own config
     instructions, temperature, top_p = await RunDispatchService.resolve_run_params(

@@ -68,7 +68,8 @@ async def prepare_messages(request: Union[CreateRunRequest, CreateThreadRunReque
             instructions += request.additional_instructions
             
     else:  # CreateThreadRunRequest - use messages from new thread
-        messages = [dict(message) for message in request.thread.messages]
+        thread_messages = request.thread.messages if request.thread else None
+        messages = [dict(message) for message in thread_messages or []]
         external_messages = messages
     
     return messages, external_messages, instructions

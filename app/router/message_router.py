@@ -78,6 +78,7 @@ async def list_messages(thread_id :str,
                                               limit = query_object.limit,
                                               after = query_object.after,
                                               before = query_object.before,
+                                              order = query_object.order,
                                               run_id = run_id)
 
 
