@@ -6,8 +6,8 @@ from app.schemas.common import (ChatMessage,
 from app.schemas.messages import (MessageObject,
                                   MessageListObject,
                                   DeletedMessageResponse)
-# Exceptions
-from app.exceptions import InvalidIdFormatException
+# ID validation
+from app.utils.id_generation import ThreadIdPath, MessageIdPath
 # Get Postgres pool
 from app.startup import get_postgres_pool
 # Message service
@@ -24,7 +24,7 @@ message_router = APIRouter()
 @message_router.post("/{thread_id}/messages",
                      summary = "[Message] Create a message",
                      response_model = MessageObject)
-async def create_message(thread_id: str,
+async def create_message(thread_id: ThreadIdPath,
                          message: ChatMessage,
                          postgres_pool: asyncpg.Pool = Depends(get_postgres_pool),
                          api_key: str = Depends(verify_api_key)):
@@ -40,10 +40,6 @@ async def create_message(thread_id: str,
         - `attachments` (List[Attachment]): A list of files attached to the message, and the tools they should be added to.
         - `metadata` (Dict[str, str]): Set of 16 key-value pairs that can be attached to an object.
     """
-    # Check string format of thread id
-    if not thread_id.startswith("thread"):
-        raise InvalidIdFormatException(input = thread_id,
-                                       params ="thread_id")
     return await MessageService.create_message(postgres_pool = postgres_pool,
                                                thread_id = thread_id,
                                                message = message)
@@ -51,7 +47,7 @@ async def create_message(thread_id: str,
 @message_router.get("/{thread_id}/messages",
                     summary = "[Message] List thread messages",
                     response_model = MessageListObject)
-async def list_messages(thread_id :str,
+async def list_messages(thread_id: ThreadIdPath,
                         run_id: Optional[str] = None,
                         query_object :PaginationQueryParams = Depends(),
                         postgres_pool: asyncpg.Pool = Depends(get_postgres_pool),
@@ -69,10 +65,6 @@ async def list_messages(thread_id :str,
         - `after` (Optional[str]): A cursor for use in pagination. `after` is an object ID that defines your place in the list. Default: None
         - `before` (Optional[str]): A cursor for use in pagination. `before` is an object ID that defines your place in the list. Default: None
     """
-    # Check string format of thread id
-    if not thread_id.startswith("thread"):
-        raise InvalidIdFormatException(input = thread_id, params = "thread_id")
-
     return await MessageService.list_messages(postgres_pool = postgres_pool,
                                               thread_id = thread_id,
                                               limit = query_object.limit,
@@ -85,8 +77,8 @@ async def list_messages(thread_id :str,
 @message_router.get("/{thread_id}/messages/{message_id}",
                     summary = "[Message] Retrieve a message",
                     response_model = MessageObject)
-async def retrieve_message(thread_id: str,
-                           message_id: str,
+async def retrieve_message(thread_id: ThreadIdPath,
+                           message_id: MessageIdPath,
                            postgres_pool: asyncpg.Pool = Depends(get_postgres_pool),
                            api_key: str = Depends(verify_api_key)):
     """
@@ -98,12 +90,6 @@ async def retrieve_message(thread_id: str,
         - `thread_id` (str): The ID of the thread that contains the message.
         - `message_id` (str): The ID of the message to retrieve.
     """
-    # Check string format of thread id
-    if not thread_id.startswith("thread"):
-        raise InvalidIdFormatException(input = thread_id, params = "thread_id")
-    # Check string format of message id
-    if not message_id.startswith("msg"):
-        raise InvalidIdFormatException(input = message_id, params = "message_id")
     # Get exact message
     return await MessageService.retrieve_message(postgres_pool = postgres_pool,
                                                  thread_id = thread_id,
@@ -112,8 +98,8 @@ async def retrieve_message(thread_id: str,
 @message_router.delete("/{thread_id}/messages/{message_id}",
                        summary = "[Message] Delete a message",
                        response_model = DeletedMessageResponse)
-async def delete_message(thread_id: str,
-                         message_id: str,
+async def delete_message(thread_id: ThreadIdPath,
+                         message_id: MessageIdPath,
                          postgres_pool: asyncpg.Pool = Depends(get_postgres_pool),
                          api_key: str = Depends(verify_api_key)):
     """
@@ -125,13 +111,6 @@ async def delete_message(thread_id: str,
         - `thread_id` (str): The ID of the thread that contains the message.
         - `message_id` (str): The ID of the message to delete.
     """
-    # Check string format of thread id
-    if not thread_id.startswith("thread"):
-        raise InvalidIdFormatException(input = thread_id, params = "thread_id")
-    # Check string format of message id
-    if not message_id.startswith("msg"):
-        raise InvalidIdFormatException(input = message_id, params = "message_id")
-
     return await MessageService.delete_message(postgres_pool = postgres_pool,
                                                thread_id = thread_id,
                                                message_id = message_id)

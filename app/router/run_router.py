@@ -1,11 +1,11 @@
 # FastAPI Components
-from fastapi import APIRouter, Path, Depends
+from fastapi import APIRouter, Depends
 # Schema
 from app.schemas.common import PaginationQueryParams
 from app.schemas.runs import RunObject, RunListObject
 from app.schemas.runs.requests import CreateRunRequest
-# Exceptions
-from app.exceptions import InvalidIdFormatException
+# ID validation
+from app.utils.id_generation import validate_id_prefix, ThreadIdPath, RunIdPath
 # DB
 from app.db.postgres import PostgresThreadStore
 from app.startup import get_postgres_pool, get_model
@@ -21,7 +21,7 @@ run_router = APIRouter()
 
 @run_router.post("/{thread_id}/runs",
                  summary = "[Run] Create a run")
-async def create_run(thread_id: str = Path(..., description="The ID of the thread"),
+async def create_run(thread_id: ThreadIdPath,
                      request: CreateRunRequest = None,
                      postgres_pool: asyncpg.Pool = Depends(get_postgres_pool),
                      llm = Depends(get_model),
@@ -36,13 +36,7 @@ async def create_run(thread_id: str = Path(..., description="The ID of the threa
         - `request` (CreateRunRequest): The run creation request containing parameters like assistant_id, model, instructions, etc.
     """
     # Check assistant_id
-    if not request.assistant_id.startswith("asst"):
-        raise InvalidIdFormatException(input = request.assistant_id,
-                                       params = "assistant_id",
-                                       prefix = "asst")
-    # Check string format of thread id
-    if not thread_id.startswith("thread"):
-        raise InvalidIdFormatException(input = thread_id, params = "thread_id")
+    validate_id_prefix(request.assistant_id, "assistant_id", "assistant")
 
     # Check thread
     await PostgresThreadStore.is_thread_exists(pool = postgres_pool,
@@ -58,7 +52,7 @@ async def create_run(thread_id: str = Path(..., description="The ID of the threa
 @run_router.get("/{thread_id}/runs",
                 summary = "[Run] List thread runs",
                 response_model = RunListObject)
-async def list_runs(thread_id :str,
+async def list_runs(thread_id: ThreadIdPath,
                     query_object :PaginationQueryParams = Depends(),
                     postgres_pool: asyncpg.Pool = Depends(get_postgres_pool),
                     api_key: str = Depends(verify_api_key)):
@@ -74,10 +68,6 @@ async def list_runs(thread_id :str,
         - `after` (str, optional): A cursor for use in pagination. `after` is an object ID that defines your place in the list.
         - `before` (str, optional): A cursor for use in pagination. `before` is an object ID that defines your place in the list.
     """
-    # Check string format of thread id
-    if not thread_id.startswith("thread"):
-        raise InvalidIdFormatException(input = thread_id, params = "thread_id")
-
     return await RunService.list_runs(postgres_pool = postgres_pool,
                                       thread_id = thread_id,
                                       limit = query_object.limit,
@@ -88,8 +78,8 @@ async def list_runs(thread_id :str,
 @run_router.get("/{thread_id}/runs/{run_id}",
                 summary = "[Run] Retrieve a run",
                 response_model = RunObject)
-async def retrieve_run(thread_id: str,
-                       run_id: str,
+async def retrieve_run(thread_id: ThreadIdPath,
+                       run_id: RunIdPath,
                        postgres_pool: asyncpg.Pool = Depends(get_postgres_pool),
                        api_key: str = Depends(verify_api_key)):
     """
@@ -101,13 +91,6 @@ async def retrieve_run(thread_id: str,
         - `thread_id` (str): The ID of the thread that the run belongs to.
         - `run_id` (str): The ID of the run to retrieve.
     """
-    # Check string format of thread id
-    if not thread_id.startswith("thread"):
-        raise InvalidIdFormatException(input = thread_id, params = "thread_id")
-    # Check string format of thread id
-    if not run_id.startswith("run"):
-        raise InvalidIdFormatException(input = run_id, params = "run_id")
-
     return await RunService.retrieve_run(postgres_pool = postgres_pool,
                                          thread_id = thread_id,
                                          run_id = run_id)

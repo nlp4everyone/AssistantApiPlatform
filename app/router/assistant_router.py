@@ -5,8 +5,8 @@ from app.schemas.assistants import (AssistantObject,
                                     CreateAssistantRequest,
                                     AssistantListObject)
 from app.schemas.common import PaginationQueryParams
-# Exceptions
-from app.exceptions import InvalidIdFormatException
+# ID validation
+from app.utils.id_generation import validate_id_prefix, AssistantIdPath
 # Postgres
 from app.startup import get_postgres_pool
 # Assistant service
@@ -48,16 +48,11 @@ async def list_assistants(request :PaginationQueryParams = Depends(),
         - `after` (str, optional): A cursor for use in pagination. `after` is an object ID that defines your place in the list.
         - `before` (str, optional): A cursor for use in pagination. `before` is an object ID that defines your place in the list.
     """
-    # Check input assistant format (Before)
-    if request.before and not request.before.startswith("asst"):
-        raise InvalidIdFormatException(input = request.before,
-                                       params = "before",
-                                       prefix = "asst")
-    # Check input assistant format (After)
-    if request.after and not request.after.startswith("asst"):
-        raise InvalidIdFormatException(input = request.after,
-                                       params = "after",
-                                       prefix = "asst")
+    # Check input assistant format (Before/After)
+    if request.before:
+        validate_id_prefix(request.before, "before", "assistant")
+    if request.after:
+        validate_id_prefix(request.after, "after", "assistant")
 
     return await AssistantService.list_assistants(postgres_pool = postgres_pool,
                                                    order = request.order,
@@ -68,7 +63,7 @@ async def list_assistants(request :PaginationQueryParams = Depends(),
 @assistant_router.get("/assistants/{assistant_id}",
                       summary = "[Assistant] Retrieve an assistant",
                       response_model = AssistantObject)
-async def retrieve_assistant(assistant_id: str,
+async def retrieve_assistant(assistant_id: AssistantIdPath,
                              postgres_pool: asyncpg.Pool = Depends(get_postgres_pool),
                              api_key: str = Depends(verify_api_key)):
     """
@@ -79,16 +74,11 @@ async def retrieve_assistant(assistant_id: str,
     ### Args
         - `assistant_id` (str): The ID of the assistant to retrieve.
     """
-    # Check assistant_id
-    if not assistant_id.startswith("asst"):
-        raise InvalidIdFormatException(input = assistant_id,
-                                       params = "assistant_id",
-                                       prefix = "asst")
     return await AssistantService.retrieve_assistant(postgres_pool = postgres_pool, assistant_id = assistant_id)
 
 @assistant_router.delete("/assistants/{assistant_id}",
                          summary = "[Assistant] Delete an assistant")
-async def delete_assistant(assistant_id: str,
+async def delete_assistant(assistant_id: AssistantIdPath,
                            postgres_pool: asyncpg.Pool = Depends(get_postgres_pool),
                            api_key: str = Depends(verify_api_key)):
     """
@@ -99,11 +89,5 @@ async def delete_assistant(assistant_id: str,
     ### Args
         - `assistant_id` (str): The ID of the assistant to delete.
     """
-    # Check assistant_id
-    if not assistant_id.startswith("asst"):
-        raise InvalidIdFormatException(input = assistant_id,
-                                       params = "assistant_id",
-                                       prefix = "asst")
-
     # Delete assistant
     return await AssistantService.delete_assistant(postgres_pool = postgres_pool, assistant_id = assistant_id)
