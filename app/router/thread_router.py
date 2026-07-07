@@ -10,8 +10,6 @@ from app.exceptions import InvalidIdFormatException
 
 # Postgres Components
 from app.startup import get_postgres_pool, get_model
-# Utils
-from app.utils.id_generation import generate_assistant_object
 # Thread service
 from app.services.threads import ThreadService
 # Run dispatch
@@ -63,32 +61,16 @@ async def create_thread_and_run(request: CreateThreadRunRequest,
                                        params="assistant_id",
                                        prefix="asst")
 
-    # Default value
-    run_id = generate_assistant_object(object="run")
-    step_id = generate_assistant_object(object="step")
-    message_id = generate_assistant_object(object="message")
-
     # Create the thread, persisting any seed metadata/tool_resources/messages from the request
     thread = await ThreadService.create_thread(postgres_pool = postgres_pool,
                                                payload = request.thread or CreateThreadRequest())
-    thread_id = thread.id
 
-    # Resolve instructions/temperature/top_p, falling back to the assistant's own config
-    instructions, temperature, top_p = await RunDispatchService.resolve_run_params(
-        postgres_pool, request.assistant_id, request.instructions, request.temperature, request.top_p)
-
-    # Enqueue background generation or return a streaming response
-    return await RunDispatchService.dispatch_run(postgres_pool = postgres_pool,
-                                                  llm = llm,
-                                                  request = request,
-                                                  thread_id = thread_id,
-                                                  run_id = run_id,
-                                                  step_id = step_id,
-                                                  message_id = message_id,
-                                                  instructions = instructions,
-                                                  temperature = temperature,
-                                                  top_p = top_p,
-                                                  endpoint_path = "/v1/threads/runs")
+    # Generate IDs, resolve run params, and enqueue background generation or stream
+    return await RunDispatchService.create_and_dispatch_run(postgres_pool = postgres_pool,
+                                                             llm = llm,
+                                                             request = request,
+                                                             thread_id = thread.id,
+                                                             endpoint_path = "/v1/threads/runs")
 
 @thread_router.get("/threads/{thread_id}",
                    summary = "[Thread] Retrieve a thread",

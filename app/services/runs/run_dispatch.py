@@ -9,6 +9,7 @@ from app.schemas.runs.requests import CreateRunRequest, CreateThreadRunRequest
 from app.db.postgres import PostgresAssistantStore
 # Utils
 from app.utils.messaging import update_assistant_response
+from app.utils.id_generation import generate_assistant_object
 # Streaming
 from app.services.streaming import handle_streaming_response
 # TaskIQ worker
@@ -92,3 +93,34 @@ class RunDispatchService:
                                                             top_p=top_p,
                                                             endpoint_path=endpoint_path),
                                  media_type="text/event-stream")
+
+    @staticmethod
+    async def create_and_dispatch_run(*,
+                                      postgres_pool: asyncpg.Pool,
+                                      llm: AsyncOpenAI,
+                                      request: "CreateRunRequest | CreateThreadRunRequest",
+                                      thread_id: str,
+                                      endpoint_path: str):
+        """
+        Generate run/step/message IDs, resolve run params, and dispatch a run
+        for an already-resolved thread. Shared by the create-run and
+        create-thread-and-run endpoints so their dispatch logic can't drift apart.
+        """
+        run_id = generate_assistant_object(object="run")
+        step_id = generate_assistant_object(object="step")
+        message_id = generate_assistant_object(object="message")
+
+        instructions, temperature, top_p = await RunDispatchService.resolve_run_params(
+            postgres_pool, request.assistant_id, request.instructions, request.temperature, request.top_p)
+
+        return await RunDispatchService.dispatch_run(postgres_pool=postgres_pool,
+                                                      llm=llm,
+                                                      request=request,
+                                                      thread_id=thread_id,
+                                                      run_id=run_id,
+                                                      step_id=step_id,
+                                                      message_id=message_id,
+                                                      instructions=instructions,
+                                                      temperature=temperature,
+                                                      top_p=top_p,
+                                                      endpoint_path=endpoint_path)
