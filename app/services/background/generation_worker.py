@@ -17,11 +17,15 @@ from app.services.common import (prepare_generation_context,
 # OpenAI client
 from openai import AsyncOpenAI
 # External dependencies
+from loggers import SystemLogger
 import asyncpg, mlflow, time
 from mlflow.entities import SpanType
 
 # Enable logging
 mlflow.config.enable_async_logging()
+
+# Runs in these statuses must never be reprocessed (e.g. on task redelivery)
+TERMINAL_RUN_STATUSES = (RunStatus.COMPLETED, RunStatus.FAILED, RunStatus.CANCELED, RunStatus.EXPIRED)
 
 async def generate_response_from_messages(postgres_pool: asyncpg.Pool,
                                           llm: AsyncOpenAI,
@@ -141,6 +145,12 @@ async def handle_generation_response(postgres_pool: asyncpg.Pool,
         Exception: Propagates any errors during generation after updating run status
     """
     try:
+        # Redelivered tasks can re-enter here after the run already finished
+        current_status = await PostgresRunStore.get_run_status(postgres_pool, run_id)
+        if current_status in TERMINAL_RUN_STATUSES:
+            SystemLogger.info(f"[GENERATION_WORKER] Run {run_id} already {current_status}, skipping reprocessing")
+            return None
+
         # Phase 1: Prepare generation context including message history and instructions
         context_data = await prepare_generation_context(
             postgres_pool=postgres_pool,

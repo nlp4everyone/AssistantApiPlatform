@@ -76,6 +76,13 @@ class PostgresRunStore:
         return run_id
 
     @staticmethod
+    async def get_run_status(pool: asyncpg.Pool, run_id: str) -> Optional[str]:
+        """Fetch a run's status, or None if it doesn't exist yet."""
+        query = "SELECT status FROM runs WHERE id = $1"
+        async with pool.acquire() as conn:
+            return await conn.fetchval(query, run_id)
+
+    @staticmethod
     async def update_run_status(pool: asyncpg.Pool,
                                 run_id: str,
                                 status: RunStatus = RunStatus.IN_PROGRESS) -> None:
