@@ -14,10 +14,10 @@ services:
       postgres:
         condition: service_healthy
       worker:
-        condition: service_started
+        condition: service_healthy
     command: >
-      uvicorn app.app:app 
-      --host 0.0.0.0 
+      uvicorn app.app:app
+      --host 0.0.0.0
       --port 8005
       --workers ${NUM_WORKERS}
 
@@ -26,6 +26,7 @@ services:
       context: ..
       dockerfile: docker/Dockerfile
     container_name: taskiq_worker
+    restart: always
     command: taskiq worker taskiq_worker:broker
     environment:
       REDIS_URL: redis://redis:${REDIS_PORT:-6379}/0
@@ -38,3 +39,9 @@ services:
         condition: service_healthy
       mlflow:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import os, sys, redis; sys.exit(0 if redis.from_url(os.environ['REDIS_URL']).ping() else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
