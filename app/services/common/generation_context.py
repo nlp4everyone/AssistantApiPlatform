@@ -56,7 +56,7 @@ async def prepare_generation_context(postgres_pool: asyncpg.Pool,
             pool=postgres_pool,
             thread_id=thread_id,
             data={
-                "data": convert_to_message_objects(messages=external_messages, thread_id=thread_id),
+                "data": convert_to_message_objects(messages=external_messages, thread_id=thread_id, id_prefix=run_id),
                 "assistant_id": assistant_id,
                 "run_id": run_id
             }

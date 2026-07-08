@@ -58,6 +58,8 @@ class PostgresRunStore:
             
         Note:
             New runs are automatically created with 'queued' status.
+            ON CONFLICT DO NOTHING makes this safe to call again with the same
+            run_id when a redelivered background task re-enters this code path.
         """
         # SQL query to insert new run with queued status
         query = """
@@ -66,6 +68,7 @@ class PostgresRunStore:
                 max_prompt_tokens, max_completion_tokens
             )
             VALUES ($1, $2, $3, 'queued', $4, $5)
+            ON CONFLICT (id) DO NOTHING
         """
         
         # Execute query using connection from pool

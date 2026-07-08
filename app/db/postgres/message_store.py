@@ -5,6 +5,7 @@ from app.exceptions.messages import MessageNotFoundException
 from app.exceptions.threads import ThreadNotFoundException
 # Other components
 from app.db.postgres.existence import check_row_exists
+from loggers import SystemLogger
 import asyncpg, json
 
 class PostgresMessageStore:
@@ -30,6 +31,9 @@ class PostgresMessageStore:
             ThreadNotFoundException: If the specified thread doesn't exist
             asyncpg.PostgresError: If database operation fails
         """
+        # ON CONFLICT DO NOTHING absorbs duplicate inserts from a redelivered
+        # background task (same message id reused on retry). Every skip is
+        # logged below so a genuine id collision bug doesn't fail silently.
         query = """
             INSERT INTO messages (
                 id, thread_id, role, run_id,
@@ -39,6 +43,7 @@ class PostgresMessageStore:
                 $1, $2, $3, $4,
                 $5::jsonb, $6::jsonb, $7::jsonb, $8
             )
+            ON CONFLICT (id) DO NOTHING
             RETURNING id;
         """
         # Extract messages from data payload
@@ -66,6 +71,8 @@ class PostgresMessageStore:
                     json.dumps(data.get("attachments", [])),
                     data.get("assistant_id"),
                 )
+                if inserted_id is None:
+                    SystemLogger.info(f"[MESSAGE_STORE] Skipped duplicate message id={messages_data.get('id')} (already exists)")
         else:
             # Handle multiple message insertion
             rows = []
@@ -81,14 +88,17 @@ class PostgresMessageStore:
                     json.dumps(msg.get("attachments", [])),
                     data.get("assistant_id"),
                 ))
-            # Execute batch insertion
+            # Execute batch insertion row-by-row (not executemany) so each
+            # RETURNING id tells us whether that specific row was skipped
             async with pool.acquire() as conn:
                 # Verify thread exists before inserting
                 if not await check_row_exists(conn, "threads", "id", thread_id):
                     raise ThreadNotFoundException(id = thread_id)
 
-                # Insert all messages in a single transaction
-                await conn.executemany(query, rows)
+                async with conn.transaction():
+                    skipped_ids = [row[0] for row in rows if await conn.fetchval(query, *row) is None]
+                if skipped_ids:
+                    SystemLogger.info(f"[MESSAGE_STORE] Skipped {len(skipped_ids)} duplicate message id(s) (already exist): {skipped_ids}")
 
     @staticmethod
     async def get_thread_messages(pool: asyncpg.Pool,

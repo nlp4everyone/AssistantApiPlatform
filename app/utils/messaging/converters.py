@@ -26,16 +26,33 @@ def build_content_items(content: Union[str, List[ContentBlock]]) -> List[Content
 
 def convert_to_message_objects(messages: List[Dict[str, str]],
                                 thread_id: str,
-                                message_id: str = None) -> List[Dict]:
-    """Convert message dictionaries to MessageObject format."""
+                                message_id: str = None,
+                                id_prefix: str = None) -> List[Dict]:
+    """Convert message dictionaries to MessageObject format.
+
+    id_prefix derives a deterministic id per message (msg_{id_prefix}_ext{i})
+    instead of a fresh random one, so a redelivered background task re-emits
+    the same ids and duplicate inserts are absorbed by ON CONFLICT DO NOTHING.
+
+    message_id pins a single fixed id and is only valid for a single message —
+    reusing it across multiple messages would silently collide on insert.
+    """
+    if message_id and len(messages) > 1:
+        raise ValueError("message_id can only be used with a single message; pass id_prefix for multiple messages")
+
     final_data = []
-    for message in messages:
+    for i, message in enumerate(messages):
         # Text content
         text_content = MessageTextContent(value=message.get("content"))
         content = [ContentItem(text=text_content)]
 
-        # Message Object - use provided message_id or generate new one
-        msg_id = message_id if message_id else generate_assistant_object(object="message")
+        # Message Object - use provided/derived message_id or generate new one
+        if message_id:
+            msg_id = message_id
+        elif id_prefix:
+            msg_id = f"msg_{id_prefix}_ext{i}"
+        else:
+            msg_id = generate_assistant_object(object="message")
         message_object = MessageObject(
             id=msg_id,
             created_at=int(time.time()),
@@ -43,9 +60,9 @@ def convert_to_message_objects(messages: List[Dict[str, str]],
             role=message.get("role"),
             content=content
         ).model_dump()
-        
+
         final_data.append(message_object)
-    
+
     return final_data
 
 
