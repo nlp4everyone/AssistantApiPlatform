@@ -32,7 +32,9 @@ async def prepare_generation_context(postgres_pool: asyncpg.Pool,
                         if request.get("thread") is None 
                         else CreateThreadRunRequest.model_validate(request))
     
-    # Create run
+    # Idempotent no-op safety net: RunDispatchService already creates this row
+    # synchronously before dispatch, so redelivered/direct calls land here via
+    # ON CONFLICT DO NOTHING instead of racing the row into existence.
     await PostgresRunStore.create_run(
         pool=postgres_pool,
         run_id=run_id,
