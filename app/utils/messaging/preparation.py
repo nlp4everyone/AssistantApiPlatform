@@ -40,7 +40,9 @@ async def prepare_messages(request: Union[CreateRunRequest, CreateThreadRunReque
     Returns:
         Tuple containing:
         - messages: Complete list of messages for AI processing
-        - external_messages: Messages that came from external sources (additional_messages or thread messages)
+        - external_messages: Messages that still need to be persisted (additional_messages on an
+          existing thread); empty for create-and-run, since the thread's seed messages are already
+          persisted by ThreadService.create_thread
         - instructions: Updated instructions string with any additional instructions appended
     """
     
@@ -67,9 +69,10 @@ async def prepare_messages(request: Union[CreateRunRequest, CreateThreadRunReque
         if request.additional_instructions:
             instructions += request.additional_instructions
             
-    else:  # CreateThreadRunRequest - use messages from new thread
+    else:  # CreateThreadRunRequest - messages already persisted (tagged with
+        # this run_id) by ThreadService.create_thread, so nothing new to insert
         thread_messages = request.thread.messages if request.thread else None
         messages = [dict(message) for message in thread_messages or []]
-        external_messages = messages
+        external_messages = []
     
     return messages, external_messages, instructions

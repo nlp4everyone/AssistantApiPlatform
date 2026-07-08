@@ -6,7 +6,7 @@ from app.schemas.threads import (ThreadObject,
                                  DeletedThreadResponse)
 from app.schemas.runs.requests import CreateThreadRunRequest
 # ID validation
-from app.utils.id_generation import validate_id_prefix, ThreadIdPath
+from app.utils.id_generation import validate_id_prefix, ThreadIdPath, generate_assistant_object
 
 # Postgres Components
 from app.startup import get_postgres_pool, get_model
@@ -58,15 +58,27 @@ async def create_thread_and_run(request: CreateThreadRunRequest,
     # Check assistant_id
     validate_id_prefix(request.assistant_id, "assistant_id", "assistant")
 
+    # Generate the run's IDs up front so the thread's seed messages can be
+    # tagged with run_id/assistant_id directly, instead of being re-inserted
+    # by the run dispatch below
+    run_id = generate_assistant_object(object = "run")
+    step_id = generate_assistant_object(object = "step")
+    message_id = generate_assistant_object(object = "message")
+
     # Create the thread, persisting any seed metadata/tool_resources/messages from the request
     thread = await ThreadService.create_thread(postgres_pool = postgres_pool,
-                                               payload = request.thread or CreateThreadRequest())
+                                               payload = request.thread or CreateThreadRequest(),
+                                               run_id = run_id,
+                                               assistant_id = request.assistant_id)
 
-    # Generate IDs, resolve run params, and enqueue background generation or stream
+    # Resolve run params and enqueue background generation or stream, reusing the IDs generated above
     return await RunDispatchService.create_and_dispatch_run(postgres_pool = postgres_pool,
                                                              llm = llm,
                                                              request = request,
                                                              thread_id = thread.id,
+                                                             run_id = run_id,
+                                                             step_id = step_id,
+                                                             message_id = message_id,
                                                              endpoint_path = "/v1/threads/runs")
 
 @thread_router.get("/threads/{thread_id}",

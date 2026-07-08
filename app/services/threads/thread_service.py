@@ -32,10 +32,15 @@ class ThreadService:
 
     @staticmethod
     async def create_thread(postgres_pool: asyncpg.Pool,
-                            payload: CreateThreadRequest) -> ThreadObject:
+                            payload: CreateThreadRequest,
+                            run_id: Optional[str] = None,
+                            assistant_id: Optional[str] = None) -> ThreadObject:
         """
         Create a thread, persist any seed messages supplied in the payload, and
         return the created thread object.
+
+        run_id/assistant_id tag the seed messages when the thread is created as
+        part of a create-and-run call, so the run doesn't need to re-insert them.
         """
         thread_id = generate_assistant_object()
         created_at_seconds = int(time.time())
@@ -49,7 +54,10 @@ class ThreadService:
 
         if seed_messages:
             await PostgresMessageStore.insert_messages(pool = postgres_pool,
-                                                       data = {"data": seed_messages, "metadata": payload.metadata or {}},
+                                                       data = {"data": seed_messages,
+                                                              "metadata": payload.metadata or {},
+                                                              "run_id": run_id,
+                                                              "assistant_id": assistant_id},
                                                        thread_id = thread_id)
 
         return ThreadObject(id = thread_id,
